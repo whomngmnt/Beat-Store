@@ -282,8 +282,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [x] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm it installed Next.js 16.x (well past the 15.2.3 fix for CVE-2025-29927)
 - [x] Add Prettier, shadcn/ui init, Husky + lint-staged
 - [x] `docker-compose.yml` with Postgres; add Prisma; write `.env.example`
-- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
-- [ ] Push the `develop` branch to a GitHub repo; add a basic CI workflow
+- [x] Push the `develop` branch to a GitHub repo; add a basic CI workflow
 
 ### Phase 1: Database & seed (days 2–3)
 
@@ -314,6 +313,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 5: Stripe checkout (days 13–16)
 
+- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
 - [ ] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
 - [ ] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 30 min
 - [ ] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction

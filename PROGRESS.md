@@ -4,17 +4,23 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 0 committed and pushed (`d9fec92`). The follow-up changes (ESLint 10, PLAN.md sync) wait for the user's review. CI on GitHub is blocked by an account billing lock.
+- **Stage:** Phase 0 done (commits `d9fec92`, `7b2d260`). Phase 1 not started.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** user fixes GitHub billing and re-runs CI; review and commit the follow-up diff. Then Phase 1 (schema, seed, `lib/db.ts`).
+- **Next step:** Phase 1: Prisma schema, seed, `lib/db.ts`.
 
 ## Open questions
 
-- GitHub Actions won't start jobs: "your account is locked due to a billing issue". The user needs to fix this at github.com/settings/billing, then re-run the CI workflow.
+- None right now.
+- Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
 ## Log
 
-### 2026-11-06: Phase 0 follow-ups (not committed yet)
+### 2026-11-06: Phase 0 closed
+
+- The user set the GitHub CI issue aside. Actions runs are refused with "account is locked due to a billing issue" (Free plan, $0 usage, public repo, Actions enabled). No API can see or clear that lock; only GitHub Support can. The user has a support ticket draft. The workflow file is in place, and a fresh local clone passes every CI step.
+- PLAN.md §8: the GitHub/CI item is ticked (develop pushed, workflow added). The accounts item (Stripe test mode, R2, Neon, Google OAuth) moved from Phase 0 to the start of Phase 5, where the first of them (Stripe) is needed.
+
+### 2026-11-06: Phase 0 follow-ups (commit `7b2d260`)
 
 - Phase 0 committed as `d9fec92` and pushed to `develop`. The Husky pre-commit hook ran lint-staged with nothing to fix.
 - CI run 42213451076 never started: GitHub says the account is locked due to a billing issue. Not a code problem. A local simulation on a fresh clone (no `.env`; `pnpm install --frozen-lockfile`, lint, typecheck, test, build) passes.
@@ -86,11 +92,9 @@ Decisions:
 
 - `PLAN.md`: full plan covering features, data model, flows, security checklist, roadmap and definition of done.
 
-## Up next: Phase 0 (PLAN.md §8)
+## Up next: Phase 1 (PLAN.md §8)
 
-- [x] Tools: Node 24.22.1, pnpm 12.18.0, Docker Desktop (installed; start it before the build). Stripe CLI → Phase 5, ffmpeg → Phase 3.
-- [x] Scaffold Next.js 16 (TypeScript, Tailwind, App Router, ESLint, `src/`)
-- [x] Prettier, shadcn/ui, Husky + lint-staged
-- [x] `docker-compose.yml` with Postgres, Prisma, `.env.example`
-- [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon, plus a Google OAuth client (user, in the browser)
-- [ ] Basic CI workflow (lint, typecheck, test, build): written and pushed. Done once a run on `develop` is green (blocked by GitHub billing).
+- [ ] `schema.prisma` with the models from PLAN.md §4, then `pnpm prisma migrate dev`
+- [ ] `prisma/seed.ts`: 4 license tiers, admin user, ~12 demo beats; add the `db:seed` script
+- [ ] `src/lib/db.ts` Prisma client singleton
+- Needs new dependencies (ask first): `@prisma/client` and `@prisma/adapter-pg` (Prisma 7 connects through a driver adapter), `tsx` (runs `seed.ts`)
