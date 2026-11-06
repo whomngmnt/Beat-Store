@@ -251,7 +251,7 @@ Claude-code-project/
 ## 7. Environment Variables (`.env.example`)
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/beatstore
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/beatstore   # local Docker, host port 5433
 BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=          GOOGLE_CLIENT_SECRET=
@@ -270,7 +270,7 @@ CRON_SECRET=
 UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ```
 
-`.env.example` contains **placeholders only**. It's committed to GitHub, so no real emails or keys go in it.
+`.env.example` contains **placeholders only**. It's committed to GitHub, so no real emails or keys go in it. It lists the v1 variables only; the later-slice ones (Resend, Upstash) are added when their slice starts.
 
 ---
 
@@ -278,7 +278,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 0: Setup (day 1)
 
-- [ ] Install Node 20+, pnpm, Docker Desktop, Stripe CLI, ffmpeg
+- [x] Install Node 24 LTS, pnpm and Docker Desktop (Stripe CLI comes in Phase 5, ffmpeg in Phase 3)
 - [x] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm it installed Next.js 16.x (well past the 15.2.3 fix for CVE-2025-29927)
 - [x] Add Prettier, shadcn/ui init, Husky + lint-staged
 - [x] `docker-compose.yml` with Postgres; add Prisma; write `.env.example`
@@ -304,6 +304,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] `PlayerBar` in the root layout using a single `<audio>` element
 - [ ] `Waveform` with wavesurfer.js on the beat page, synced to the global player
 - [ ] Increment `plays` (debounced, server action) after 10s of listening
+- [ ] Install ffmpeg
 - [ ] `scripts/make-preview.ts` ffmpeg pipeline
 
 ### Phase 4: Cart (days 11–12)
@@ -320,6 +321,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] Handle `checkout.session.expired` and `charge.refunded`; cron routes for retrying fulfilment and releasing reservations
 - [ ] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
 - [ ] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
+- [ ] Install the Stripe CLI and run `stripe login`
 - [ ] Local testing: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 
 ### Phase 6: Delivery (days 17–19)

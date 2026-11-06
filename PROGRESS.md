@@ -4,19 +4,25 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 0 built and checked locally, waiting for the user's review. Not committed yet.
+- **Stage:** Phase 0 committed and pushed (`d9fec92`). The follow-up changes (ESLint 10, PLAN.md sync) wait for the user's review. CI on GitHub is blocked by an account billing lock.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** user reviews the diff, then commit and push to `develop` and confirm CI is green on GitHub. Then Phase 1 (schema, seed, `lib/db.ts`).
+- **Next step:** user fixes GitHub billing and re-runs CI; review and commit the follow-up diff. Then Phase 1 (schema, seed, `lib/db.ts`).
 
 ## Open questions
 
-- PLAN.md is behind two Phase 0 decisions: §8 Phase 0 still lists Stripe CLI and ffmpeg (now installed with Phase 5 and Phase 3), and §7 still shows port 5432 in `DATABASE_URL` (local Docker now uses 5433). Update PLAN.md to match?
-- ESLint: create-next-app 16.4.5 pins `eslint@^9`, which npm now marks deprecated (10.x is out). Move to ESLint 10 now or later?
-- Pin Node in winget (`winget pin add --id OpenJS.NodeJS.LTS --version 24.*`) so `winget upgrade --all` can't move it to 26?
+- GitHub Actions won't start jobs: "your account is locked due to a billing issue". The user needs to fix this at github.com/settings/billing, then re-run the CI workflow.
 
 ## Log
 
-### 2026-11-06: Phase 0 scaffold and tooling (not committed yet)
+### 2026-11-06: Phase 0 follow-ups (not committed yet)
+
+- Phase 0 committed as `d9fec92` and pushed to `develop`. The Husky pre-commit hook ran lint-staged with nothing to fix.
+- CI run 42213451076 never started: GitHub says the account is locked due to a billing issue. Not a code problem. A local simulation on a fresh clone (no `.env`; `pnpm install --frozen-lockfile`, lint, typecheck, test, build) passes.
+- ESLint upgraded from 9 to **10.14.0** (user decision). npm marks ESLint 9 "no longer supported". `eslint-plugin-react`, `eslint-plugin-jsx-a11y` and `eslint-plugin-import` (bundled by `eslint-config-next` 16.4.5, already at their newest versions) declare support only up to ESLint 9, so pnpm prints a peer warning. Lint still works: a deliberately bad component triggered rules from every plugin with no crash. If a plugin ever crashes, roll back with `pnpm add -D eslint@^9`.
+- PLAN.md synced: in §7, `DATABASE_URL` uses port 5433 and a note says `.env.example` is v1-only. In §8, the Phase 0 tools item is ticked (Node 24 LTS, pnpm, Docker), "Install ffmpeg" moved to Phase 3 and "Install the Stripe CLI" to Phase 5.
+- winget: Node pinned to `24.*`, so `winget upgrade` won't move it to 26.
+
+### 2026-11-06: Phase 0 scaffold and tooling (commit `d9fec92`)
 
 - Next.js **16.4.5** + React 19.3 from create-next-app 16.4.5 (`--empty`: TypeScript, Tailwind 4, ESLint, App Router, `src/`). It was scaffolded in a temp folder and copied in, because create-next-app refuses a folder that already has files.
 - Tailwind 4 runs through the `@tailwindcss/turbopack` loader in `next.config.ts`, so there is no PostCSS file.
@@ -87,4 +93,4 @@ Decisions:
 - [x] Prettier, shadcn/ui, Husky + lint-staged
 - [x] `docker-compose.yml` with Postgres, Prisma, `.env.example`
 - [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon, plus a Google OAuth client (user, in the browser)
-- [ ] Basic CI workflow (lint, typecheck, test, build): written, done once the first push to `develop` is green
+- [ ] Basic CI workflow (lint, typecheck, test, build): written and pushed. Done once a run on `develop` is green (blocked by GitHub billing).
