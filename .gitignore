@@ -1,8 +1,40 @@
 # Secrets: real env files never go in git. Only the placeholder file does.
-# If create-next-app replaces this file in Phase 0, put these lines back.
 .env*
 !.env.example
 
 # Personal Claude Code files
 .claude/settings.local.json
 CLAUDE.local.md
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# Prisma client, rebuilt by `prisma generate`
+/src/generated/prisma
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+.pnpm-debug.log*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

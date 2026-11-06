@@ -279,9 +279,9 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ### Phase 0: Setup (day 1)
 
 - [ ] Install Node 20+, pnpm, Docker Desktop, Stripe CLI, ffmpeg
-- [ ] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm it installed Next.js 16.x (well past the 15.2.3 fix for CVE-2025-29927)
-- [ ] Add Prettier, shadcn/ui init, Husky + lint-staged
-- [ ] `docker-compose.yml` with Postgres; add Prisma; write `.env.example`
+- [x] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm it installed Next.js 16.x (well past the 15.2.3 fix for CVE-2025-29927)
+- [x] Add Prettier, shadcn/ui init, Husky + lint-staged
+- [x] `docker-compose.yml` with Postgres; add Prisma; write `.env.example`
 - [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
 - [ ] Push the `develop` branch to a GitHub repo; add a basic CI workflow
 

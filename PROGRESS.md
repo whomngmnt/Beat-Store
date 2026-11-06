@@ -4,15 +4,47 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** setup done, Phase 0 not started. No app code yet.
+- **Stage:** Phase 0 built and checked locally, waiting for the user's review. Not committed yet.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** start Phase 0 (PLAN.md §8).
+- **Next step:** user reviews the diff, then commit and push to `develop` and confirm CI is green on GitHub. Then Phase 1 (schema, seed, `lib/db.ts`).
 
 ## Open questions
 
-- None right now.
+- PLAN.md is behind two Phase 0 decisions: §8 Phase 0 still lists Stripe CLI and ffmpeg (now installed with Phase 5 and Phase 3), and §7 still shows port 5432 in `DATABASE_URL` (local Docker now uses 5433). Update PLAN.md to match?
+- ESLint: create-next-app 16.4.5 pins `eslint@^9`, which npm now marks deprecated (10.x is out). Move to ESLint 10 now or later?
+- Pin Node in winget (`winget pin add --id OpenJS.NodeJS.LTS --version 24.*`) so `winget upgrade --all` can't move it to 26?
 
 ## Log
+
+### 2026-11-06: Phase 0 scaffold and tooling (not committed yet)
+
+- Next.js **16.4.5** + React 19.3 from create-next-app 16.4.5 (`--empty`: TypeScript, Tailwind 4, ESLint, App Router, `src/`). It was scaffolded in a temp folder and copied in, because create-next-app refuses a folder that already has files.
+- Tailwind 4 runs through the `@tailwindcss/turbopack` loader in `next.config.ts`, so there is no PostCSS file.
+- Dev tools: Prettier, Husky (pre-commit runs `lint-staged`), lint-staged, Vitest, Prisma **7.10.1**, dotenv. `@types/node` bumped to 24.
+- shadcn 4.23 `init --defaults`: style `base-nova` on Base UI, neutral colors, lucide icons, Geist font in `layout.tsx`, plus a `Button` component. It adds the `cn` package (shadcn's own replacement for clsx + tailwind-merge; checked: published by shadcn, no dependencies) and `shadcn` as a runtime dependency, because `globals.css` imports `shadcn/tailwind.css`.
+- `pnpm-workspace.yaml`: only `prisma` and `@prisma/engines` may run install scripts (they download the schema engine). pnpm 12 fails the install otherwise.
+- Docker Postgres 18 on host port 5433. `prisma.config.ts` plus an empty `schema.prisma` (generator output `src/generated/prisma`, gitignored). `.env.example` (v1 only). Local `.env` copied from it (gitignored).
+- CI: `.github/workflows/ci.yml` runs lint, typecheck, test and build on Node 24 for pushes to `develop` and PRs to `main`.
+- `agentRules: false` in `next.config.ts`. Without it, `next dev` 16.4 writes an `AGENTS.md` on every start, even when scaffolded with `--no-agents-md`.
+- Prettier skips `*.md` and `.claude/`, so it never rewrites the docs or the git guard hook.
+- Scripts: `typecheck` = `next typegen && tsc --noEmit` (route types such as `LayoutProps` need typegen first). `test` = `vitest run --passWithNoTests` until the first test exists. `db:seed` comes with `seed.ts` in Phase 1.
+- Checks: Postgres 18.6 healthy; `prisma validate` and a `SELECT 1` through `.env` pass; lint, typecheck, test, build and Prettier pass; `pnpm dev` serves `/` with 200; `pnpm audit --audit-level=high` passes. The audit still shows 1 moderate (minimatch) and 1 low (deepmerge, no fix yet), both inside dev tooling (shadcn CLI, ESLint plugins).
+
+### 2026-11-06: Phase 0 tools installed
+
+- Node **24.22.1** LTS via winget (`OpenJS.NodeJS.LTS`). It replaced Node 20.20.0, which reached end of life on 2026-04-30. winget's newest 24.x is 24.22.1. It's the latest Node 24 security release; 24.22.2 has no security fixes.
+- pnpm **12.18.0** via `npm install -g pnpm@latest`. It runs as a native `pnpm.exe`.
+- No restart needed: both are on the existing PATH.
+- Docker Desktop is installed (Engine 29.6.2, Compose v5.3.1, WSL2), but the engine is not started yet.
+- Stripe CLI and ffmpeg are deferred to the slices that need them (user decision).
+- Caution: winget offers Node 26 as an upgrade for `OpenJS.NodeJS.LTS`, so `winget upgrade --all` would move Node off 24.
+
+Phase 0 decisions (approved plan):
+
+- Local Docker Postgres on host port **5433**. A native PostgreSQL 18 Windows service (`postgresql-x64-18`) already uses 5432 and stays untouched.
+- `dotenv` added as a dev dependency: Prisma 7's `prisma.config.ts` needs it to read `.env`.
+- `.env.example` holds v1 variables only. Resend and Upstash placeholders come with their slices.
+- Node 24 LTS (not 26). Prisma pinned to `@7` (7.10.1), because npm's `latest` tag points to an 8.0 release candidate.
 
 ### 2026-11-06: Branch protection on `main`
 
@@ -50,9 +82,9 @@ Decisions:
 
 ## Up next: Phase 0 (PLAN.md §8)
 
-- [ ] Tools: Node 20+ (20.20.0 already installed), pnpm, Docker Desktop, Stripe CLI, ffmpeg
-- [ ] Scaffold Next.js 16 (TypeScript, Tailwind, App Router, ESLint, `src/`)
-- [ ] Prettier, shadcn/ui, Husky + lint-staged
-- [ ] `docker-compose.yml` with Postgres, Prisma, `.env.example`
-- [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon, plus a Google OAuth client
-- [ ] Basic CI workflow (lint, typecheck, test, build)
+- [x] Tools: Node 24.22.1, pnpm 12.18.0, Docker Desktop (installed; start it before the build). Stripe CLI → Phase 5, ffmpeg → Phase 3.
+- [x] Scaffold Next.js 16 (TypeScript, Tailwind, App Router, ESLint, `src/`)
+- [x] Prettier, shadcn/ui, Husky + lint-staged
+- [x] `docker-compose.yml` with Postgres, Prisma, `.env.example`
+- [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon, plus a Google OAuth client (user, in the browser)
+- [ ] Basic CI workflow (lint, typecheck, test, build): written, done once the first push to `develop` is green

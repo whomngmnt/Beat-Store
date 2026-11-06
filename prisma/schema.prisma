@@ -1,0 +1,11 @@
+// Database schema. Models are added in Phase 1 (PLAN.md §4).
+// The connection URL is set in prisma.config.ts, not here (Prisma 7).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
