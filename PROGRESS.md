@@ -5,16 +5,24 @@ Claude updates this file at the end of each task. Newest entries go first in the
 ## Current status
 
 - **Stage:** setup done, Phase 0 not started. No app code yet.
-- **Branch:** all work on `develop`. `main` is untouched.
-- **Next step:** answer the open questions below, then start Phase 0 (PLAN.md §8).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
+- **Next step:** start Phase 0 (PLAN.md §8).
 
 ## Open questions
 
-- Magic-link sign-in needs email, which is now a later slice. Is v1 sign-in Google only?
-- PLAN.md still lists Next.js 15, Auth.js and the cut features. Update it to match CLAUDE.md?
-- Turn on GitHub branch protection for `main`? The hook only stops Claude's own commands.
+- None right now.
 
 ## Log
+
+### 2026-11-06: Branch protection on `main`
+
+- GitHub: `main` now requires a pull request before merging, with 0 required approvals. Admins can't bypass it, and force pushes and deleting the branch are blocked. This also stops direct pushes from your own terminal, which the Claude hook can't do.
+- GitHub CLI is logged in as `whomngmnt` (token scopes: repo, read:org, gist).
+
+### 2026-11-06: PLAN.md matches the new stack
+
+- `PLAN.md`: Next.js 16 and Better Auth (Google sign-in only in v1) in the stack, auth flow, routes, env vars and roadmap. The four later slices (rate limiting, email, license PDF, E2E tests) are tagged where they appear and listed in a new "Later slices" roadmap section. §9 Security Checklist is unchanged.
+- Decision: v1 sign-in is Google only. Email and magic-link sign-in come later with Resend.
 
 ### 2026-11-06: Progress-tracking rule
 
@@ -46,5 +54,5 @@ Decisions:
 - [ ] Scaffold Next.js 16 (TypeScript, Tailwind, App Router, ESLint, `src/`)
 - [ ] Prettier, shadcn/ui, Husky + lint-staged
 - [ ] `docker-compose.yml` with Postgres, Prisma, `.env.example`
-- [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon
+- [ ] Accounts: Stripe (test mode), Cloudflare R2, Neon, plus a Google OAuth client
 - [ ] Basic CI workflow (lint, typecheck, test, build)

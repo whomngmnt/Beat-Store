@@ -4,7 +4,7 @@
 
 ## 1. Context
 
-You want a real online storefront for your type beats. Visitors can browse beats, listen to watermarked previews, pick a license tier (MP3 / WAV / Stems / Exclusive), and pay through a Stripe checkout in **test mode**. After paying, they get secure download links and a license PDF. You manage beats, prices and orders from an admin panel.
+You want a real online storefront for your type beats. Visitors can browse beats, listen to watermarked previews, pick a license tier (MP3 / WAV / Stems / Exclusive), and pay through a Stripe checkout in **test mode**. After paying, they get secure download links (a license PDF comes in a later slice). You manage beats, prices and orders from an admin panel.
 
 The project covers the full stack: **frontend, backend, database, file storage and payments**. It's a working product for your music business and also a strong portfolio piece.
 
@@ -19,25 +19,28 @@ The project covers the full stack: **frontend, backend, database, file storage a
 
 **Out of scope for v1:** multiple producers or a marketplace, subscriptions, real (live-mode) payments, mobile apps.
 
+**Later slices (after v1):** rate limiting (Upstash), email with receipts and magic-link sign-in (Resend), license PDF (@react-pdf/renderer) and E2E tests (Playwright). See §8.
+
 ---
 
 ## 2. Tech Stack (recommended)
 
 | Layer            | Choice                                                                               | Why                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Framework        | **Next.js 15 (≥ 15.2.3, App Router) + TypeScript**                                   | One codebase for the frontend and backend (Route Handlers / Server Actions), good SEO for beat pages |
+| Framework        | **Next.js 16 (latest 16.x, App Router) + TypeScript**                                | One codebase for the frontend and backend (Route Handlers / Server Actions), good SEO for beat pages |
 | Styling/UI       | **Tailwind CSS + shadcn/ui**                                                         | Fast, consistent dark "studio" look                                                                  |
 | Audio            | **wavesurfer.js** (waveform) + a global `<audio>` player kept in a **Zustand** store | Persistent player bar, waveform display                                                              |
 | Database         | **PostgreSQL** (local via Docker, hosted on **Neon** or **Supabase**)                | Relational data: beats, licenses, orders                                                             |
 | ORM              | **Prisma**                                                                           | Type-safe queries, migrations, seeding                                                               |
-| Auth             | **Auth.js (NextAuth v5)**: email magic link + Google; `role` field for admin         | Simple and secure                                                                                    |
+| Auth             | **Better Auth**: Google sign-in in v1 (magic link later); `role` field for admin     | Simple and secure; Auth.js is now in maintenance mode                                                |
 | File storage     | **Cloudflare R2** (S3-compatible) or AWS S3                                          | Cheap storage; signed URLs for private files                                                         |
 | Payments         | **Stripe Checkout + Webhooks (test mode)**                                           | Hosted, secure, test cards                                                                           |
-| Email            | **Resend** + React Email                                                             | Order receipts with download links                                                                   |
-| PDF              | **@react-pdf/renderer**                                                              | License agreement generated per order                                                                |
+| Email            | **Later slice:** **Resend** + React Email                                            | Order receipts with download links; magic-link sign-in                                               |
+| PDF              | **Later slice:** **@react-pdf/renderer**                                             | License agreement generated per order                                                                |
 | Audio processing | **ffmpeg** (script)                                                                  | Produce tagged/watermarked MP3 previews                                                              |
 | Validation       | **Zod**                                                                              | Validate forms and API input                                                                         |
-| Testing          | **Vitest** (unit), **Playwright** (E2E), Stripe CLI (webhooks)                       |                                                                                                      |
+| Rate limiting    | **Later slice:** **Upstash** ratelimit                                               | Limit magic-link, checkout and download requests                                                     |
+| Testing          | **Vitest** (unit + integration), Stripe CLI (webhooks); Playwright E2E: later slice  |                                                                                                      |
 | Deploy           | **Vercel** (app) + Neon (DB) + R2 (files)                                            | Free tiers available                                                                                 |
 | CI               | **GitHub Actions**: lint, typecheck, test, build                                     |                                                                                                      |
 
@@ -70,7 +73,7 @@ The project covers the full stack: **frontend, backend, database, file storage a
 - Dashboard: revenue (test), orders count, top beats, plays (simple charts)
 - Beats CRUD: upload cover, preview MP3, full MP3, WAV, stems ZIP; set BPM, key, tags, status (draft / published / sold-exclusive)
 - License tier templates plus per-beat price overrides
-- Orders list and details, resend download email, manual refund (Stripe test)
+- Orders list and details, manual refund (Stripe test); "resend download email" comes with the email slice
 - Coupons (optional): percent or fixed amount codes
 
 ---
@@ -140,9 +143,9 @@ Key rules:
    - create `Download` rows
    - commit
 7. **After the commit**, run the side effects. These don't depend on the webhook retrying, so they must be safe to run again:
-   - automatic refund (`stripe.refunds.create` with idempotency key `refund-<orderItemId>`) and an apology email for any lost exclusive
-   - generate license PDFs, upload them, set `licensePdfKey`
-   - send the receipt email, then set `emailSentAt`
+   - automatic refund (`stripe.refunds.create` with idempotency key `refund-<orderItemId>`) for any lost exclusive, plus an apology email once the email slice exists
+   - later slice (PDF): generate license PDFs, upload them, set `licensePdfKey`
+   - later slice (email): send the receipt email, then set `emailSentAt`
    - If any step fails, it's retried by a job (Vercel Cron every 5 min: `PAID AND (emailSentAt IS NULL OR PDFs missing)`). The webhook still returns 200, because the payment is already recorded.
 8. The **success page always shows the downloads**. It looks the order up by `session_id`, retrieves the session from Stripe on the server, and if the webhook hasn't arrived yet it **runs the same idempotent fulfilment function itself**. Delivery therefore never depends on email. It also shows the guest download link, so the buyer can bookmark it.
 9. `checkout.session.expired` releases the reservations (`status = PUBLISHED, reservedByOrderId = null WHERE reservedByOrderId = order.id`) and sets the order to EXPIRED. A cron job also releases any reservation past `reservedUntil` in case the event is lost.
@@ -152,10 +155,10 @@ Test cards: `4242 4242 4242 4242` (success), `4000 0000 0000 9995` (decline), `4
 
 ### 5.3 Auth & roles
 
-- Auth.js with the Prisma adapter.
+- Better Auth with its Prisma adapter. v1 sign-in is Google only; magic-link sign-in comes with the email slice.
 - **Middleware is only a convenience redirect, not the security boundary.** CVE-2025-29927 let attackers skip middleware on Next.js < 15.2.3. Every admin and account **page, route handler and server action** calls `requireAdmin()` / `requireUser()` from `lib/auth-guards.ts` on the server before doing anything.
 - **Guest orders are linked to an account only when the email is verified.** A magic-link sign-in proves it. Google sign-in counts only if the profile has `email_verified === true`. Unverified accounts never see guest orders.
-- Magic-link requests are **rate-limited** per email and per IP (e.g. 3 per 15 min).
+- When magic links ship (email slice), magic-link requests are **rate-limited** per email and per IP (e.g. 3 per 15 min).
 - The first admin is created by the seed script using `ADMIN_EMAIL` from env.
 
 ### 5.4 Exclusive reservation (race-condition fix)
@@ -211,8 +214,8 @@ Claude-code-project/
 │  │  ├─ api/webhooks/stripe/route.ts
 │  │  ├─ api/download/[orderItemId]/[fileType]/route.ts
 │  │  ├─ api/upload/route.ts     # presigned upload URLs for admin
-│  │  ├─ api/auth/[...nextauth]/route.ts
-│  │  ├─ api/cron/fulfilment-retry/route.ts      # resend missing emails/PDFs (CRON_SECRET protected)
+│  │  ├─ api/auth/[...all]/route.ts              # Better Auth handler
+│  │  ├─ api/cron/fulfilment-retry/route.ts      # retry post-commit side effects: refunds (emails/PDFs in later slices), CRON_SECRET protected
 │  │  ├─ api/cron/release-reservations/route.ts  # free expired exclusive reservations
 │  │  └─ layout.tsx              # includes <PlayerBar/>
 │  ├─ components/
@@ -229,17 +232,17 @@ Claude-code-project/
 │  │  ├─ fulfilment.ts           # idempotent fulfilOrder() + post-commit side effects
 │  │  ├─ reservation.ts          # reserveExclusive(), releaseReservation()
 │  │  ├─ tokens.ts               # random download token + SHA-256 hash
-│  │  ├─ ratelimit.ts
-│  │  ├─ email.ts
-│  │  ├─ license-pdf.tsx
+│  │  ├─ ratelimit.ts            # later slice (Upstash)
+│  │  ├─ email.ts                # later slice (Resend)
+│  │  ├─ license-pdf.tsx         # later slice (PDF)
 │  │  ├─ pricing.ts              # cart total, coupon, bundle logic (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
 │  ├─ actions/                   # server actions: checkout.ts, beats.ts, orders.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
-│  └─ emails/OrderReceipt.tsx
+│  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
 │  ├─ unit/pricing.test.ts, validators.test.ts
-│  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts
+│  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts   # later slice (Playwright)
 └─ .github/workflows/ci.yml
 ```
 
@@ -249,8 +252,9 @@ Claude-code-project/
 
 ```
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/beatstore
-AUTH_SECRET=
-AUTH_GOOGLE_ID=            AUTH_GOOGLE_SECRET=
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=http://localhost:3000
+GOOGLE_CLIENT_ID=          GOOGLE_CLIENT_SECRET=
 ADMIN_EMAIL=admin@example.com      # put your real address only in .env (never committed)
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
@@ -260,10 +264,10 @@ S3_ACCESS_KEY_ID=          S3_SECRET_ACCESS_KEY=
 S3_PUBLIC_BUCKET=beatstore-previews
 S3_PRIVATE_BUCKET=beatstore-files
 PUBLIC_CDN_URL=
-RESEND_API_KEY=            EMAIL_FROM=
+RESEND_API_KEY=            EMAIL_FROM=                # later slice (Resend)
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 CRON_SECRET=
-UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
+UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ```
 
 `.env.example` contains **placeholders only**. It's committed to GitHub, so no real emails or keys go in it.
@@ -275,10 +279,10 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 ### Phase 0: Setup (day 1)
 
 - [ ] Install Node 20+, pnpm, Docker Desktop, Stripe CLI, ffmpeg
-- [ ] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm Next.js ≥ 15.2.3 (CVE-2025-29927)
+- [ ] `pnpm create next-app` (TS, Tailwind, App Router, ESLint, `src/`); confirm it installed Next.js 16.x (well past the 15.2.3 fix for CVE-2025-29927)
 - [ ] Add Prettier, shadcn/ui init, Husky + lint-staged
 - [ ] `docker-compose.yml` with Postgres; add Prisma; write `.env.example`
-- [ ] Create Stripe (test), Cloudflare R2, Resend and Neon accounts
+- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
 - [ ] Push the `develop` branch to a GitHub repo; add a basic CI workflow
 
 ### Phase 1: Database & seed (days 2–3)
@@ -312,7 +316,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 - [ ] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
 - [ ] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 30 min
 - [ ] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction
-- [ ] `lib/fulfilment.ts`: DB-only transaction, then retryable side effects (refund, PDF, email)
+- [ ] `lib/fulfilment.ts`: DB-only transaction, then retryable side effects (refund; PDF and email come with their later slices)
 - [ ] Handle `checkout.session.expired` and `charge.refunded`; cron routes for retrying fulfilment and releasing reservations
 - [ ] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
 - [ ] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
@@ -323,16 +327,14 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 - [ ] `lib/storage.ts` with signed GET URLs
 - [ ] `lib/tokens.ts`: 32-byte random guest token, only its SHA-256 hash stored, 30-day expiry
 - [ ] Download route: owner or token check, PAID check, atomic `count < maxCount` limit (5 per file), 10-min signed URL
-- [ ] License PDF (buyer name/email, beat, tier, rights, date, order id), generated after commit
-- [ ] Receipt email via Resend after commit, `emailSentAt` set, retried by cron
 - [ ] Exclusive sale marks the beat SOLD (only if it's still reserved by this order) and hides it from the catalog
 - [ ] Admin: reset download count / reissue guest token
 
 ### Phase 7: Auth & account (days 20–21)
 
-- [ ] Auth.js (magic link + Google); rate-limit magic-link requests per email and per IP
-- [ ] `lib/auth-guards.ts` (`requireUser`, `requireAdmin`) called in **every** protected page, route and server action; middleware only for redirects
-- [ ] `/account` order history and re-downloads; link guest orders by email **only for verified emails** (magic link, or Google with `email_verified`)
+- [ ] Better Auth with the Prisma adapter and Google sign-in (magic link comes with the email slice)
+- [ ] `lib/auth-guards.ts` (`requireUser`, `requireAdmin`) called in **every** protected page, route and server action; `proxy.ts` (Next.js 16's name for middleware) only for redirects
+- [ ] `/account` order history and re-downloads; link guest orders by email **only for verified emails** (Google with `email_verified`; magic link once the email slice exists)
 
 ### Phase 8: Admin panel (days 22–26)
 
@@ -342,7 +344,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 - [ ] R2 CORS: only the site origin (and localhost in dev), PUT/GET only
 - [ ] Descriptions are plain text: render as text (React escapes it), never `dangerouslySetInnerHTML`
 - [ ] License tier template editor and per-beat price overrides
-- [ ] Orders table and detail page, resend email, refund (Stripe API)
+- [ ] Orders table and detail page, refund (Stripe API)
 - [ ] Dashboard stats and charts (revenue by day, top beats)
 - [ ] Coupons CRUD (optional)
 
@@ -358,10 +360,18 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 
 - [ ] Vitest unit tests (pricing, validators, license tier rules, token hashing)
 - [ ] Integration tests against a real Postgres: reservation race, duplicate and concurrent webhook delivery, download limit
-- [ ] CI: `pnpm audit --audit-level=high` (plus Dependabot) so vulnerable Next.js/Auth.js versions fail the build
-- [ ] Playwright E2E (section 10)
+- [ ] CI: `pnpm audit --audit-level=high` (plus Dependabot) so vulnerable Next.js/Better Auth versions fail the build
 - [ ] Deploy to Vercel; Neon DB (`prisma migrate deploy`); R2 buckets plus CORS; production webhook endpoint in the Stripe dashboard (test mode)
 - [ ] README with setup steps, screenshots, architecture diagram
+
+### Later slices (after v1)
+
+Built one at a time, only once the v1 phases above work. Each slice brings its own tests.
+
+- [ ] **Rate limiting (Upstash):** `lib/ratelimit.ts`; limit checkout and download requests, and magic-link requests per email and per IP (e.g. 3 per 15 min)
+- [ ] **Email (Resend + React Email):** receipt email after commit with `emailSentAt` set and retried by cron; apology email for a lost exclusive; "resend email" on the admin order page; magic-link sign-in. Magic links need the rate-limiting slice first.
+- [ ] **License PDF (@react-pdf/renderer):** PDF per order item (buyer name/email, beat, tier, rights, date, order id), generated after commit and downloadable as `LICENSE`
+- [ ] **E2E tests (Playwright):** browse, checkout and admin specs (section 10)
 
 ### Later ideas (v2)
 
@@ -408,15 +418,15 @@ Make-an-offer for exclusives, Stripe Connect, PayPal, beat bundles and packs, so
 
 1. `docker compose up -d && pnpm prisma migrate dev && pnpm db:seed && pnpm dev`, then the catalog shows 12 demo beats
 2. Previews play, the player bar keeps playing across page navigation, and the waveform seeks correctly
-3. Add Basic + Exclusive to the cart, check out with `4242…`, and land on the success page. The order is PAID in the DB, the email arrives, MP3/WAV/stems/PDF download, and the exclusive beat now shows SOLD.
+3. Add Basic + Exclusive to the cart, check out with `4242…`, and land on the success page. The order is PAID in the DB, MP3/WAV/stems download, and the exclusive beat now shows SOLD. (With the email and PDF slices, the email also arrives and the PDF downloads.)
 4. The decline card `4000 0000 0000 9995` leaves the order PENDING/FAILED with no downloads
 5. Replay the webhook with `stripe events resend <id>`, and also send two deliveries at the same time. Exactly one fulfilment happens.
 6. Opening a download URL for someone else's order returns 403; a wrong or expired guest token returns 403; the 6th download of a file returns 429; a signed URL stops working after it expires
 7. A non-admin visiting `/admin` is redirected, **and** calling admin server actions or routes directly (e.g. with an `x-middleware-subrequest` header) returns 401/403; an admin can upload a beat and see it published
 8. **Exclusive race:** two browsers start checkout for the same exclusive and only one reaches Stripe. Let one session expire: the beat becomes available again. Force a second payment through (test helper) and it's refunded automatically.
-9. **Late or failed email:** with Resend disabled, the purchase still shows downloads on the success page, and the cron job sends the email once Resend works again
+9. **Late or failed email (email slice):** with Resend disabled, the purchase still shows downloads on the success page, and the cron job sends the email once Resend works again
 10. A webhook with a tampered body or a mismatched amount isn't fulfilled
 11. An oversized or wrong-type upload blocks publishing; a description containing `<script>` renders as plain text
 12. Signing up with Google using an unverified email that matches a guest order does **not** show that order
-13. `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm audit` all pass in CI
+13. `pnpm lint && pnpm typecheck && pnpm test && pnpm audit` all pass in CI (plus `pnpm test:e2e` once the Playwright slice exists)
 14. The deployed Vercel URL runs the same checkout flow end to end in test mode
