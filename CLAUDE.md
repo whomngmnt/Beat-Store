@@ -10,6 +10,7 @@ Online store for type beats: a catalog with watermarked previews, 4 license tier
 - For any change that touches more than one file, plan first: list the files and the approach, then wait for an OK.
 - Use the simplest approach that works. No extra abstractions, layers, wrappers or config "for later".
 - After each task, explain what you changed and why, in plain words.
+- At the end of each task, update `PROGRESS.md`: status, open questions, a log entry and next steps.
 - If a change would contradict PLAN.md, say so and ask.
 - When a roadmap item is done, tick its checkbox in PLAN.md §8.
 

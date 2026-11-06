@@ -16,6 +16,10 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Log
 
+### 2026-11-06: Progress-tracking rule
+
+- `CLAUDE.md`: added the rule to update `PROGRESS.md` at the end of each task, so every session keeps this file current.
+
 ### 2026-11-06: Claude Code setup (commit `d87ce67`)
 
 Done:
