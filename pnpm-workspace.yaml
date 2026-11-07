@@ -1,8 +1,10 @@
 # Which dependencies may run install scripts (pnpm blocks them by default).
-# sharp and unrs-resolver ship prebuilt binaries, so they don't need theirs.
+# sharp, unrs-resolver and esbuild (used by tsx) ship prebuilt binaries,
+# so they don't need theirs.
 # Prisma's scripts download the schema engine that migrations use.
 allowBuilds:
   sharp: false
   unrs-resolver: false
+  esbuild: false
   prisma: true
   "@prisma/engines": true

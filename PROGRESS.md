@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 1 in progress. Schema, first migration and the Prisma client packages committed. `src/lib/db.ts` written, waiting for review and commit.
+- **Stage:** Phase 1 done except demo audio. `src/lib/db.ts` committed (`09af8ae`). `prisma/seed.ts` written, waiting for review and commit. The PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 1: `prisma/seed.ts` (plan first). That task runs the first real queries through the client.
+- **Next step:** Phase 2: layout, header/nav, footer, dark theme (plan first).
 
 ## Open questions
 
@@ -19,9 +19,20 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 - **Guest download link (Phase 5 or 6).** Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
 - **Guest email (Phase 4 or 5).** Default: take it from Stripe Checkout after payment, which is why `Order.email` is optional. Asking for the email on the cart page before checkout is the alternative, only if the user changes the default.
+- **Admin sign-in (Phase 7).** The seed creates the admin `User` from `ADMIN_EMAIL` with `emailVerified: false` and no Google account linked. When Better Auth arrives, check that signing in with Google under that email links to this existing user instead of failing or creating a second one.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-07: `prisma/seed.ts` (tiers, admin, 12 demo beats)
+
+- `pnpm db:seed` runs `tsx prisma/seed.ts`. tsx is a new devDependency (`^4.23.15`, user approved). It resolves the `@/` paths from `tsconfig.json` (stated in its docs) and the generated client's extensionless imports. It loads our `.ts` files as CommonJS and replaces `import.meta` with `{ url, dirname, filename }`, so the generated client's `import.meta.url` works without `"type": "module"`. No seed command in `prisma.config.ts`: Prisma 7 no longer seeds automatically, so `pnpm db:seed` is the one entry point.
+- `pnpm-workspace.yaml`: `esbuild: false`. tsx depends on esbuild, and pnpm refused the install (`ERR_PNPM_IGNORED_BUILDS`) until its install script had a decision. esbuild's binary comes from a platform package, so the script isn't needed.
+- The seed imports `dotenv/config` first, then reuses `db` from `src/lib/db.ts` and calls `$disconnect()` at the end. It fails early with "ADMIN_EMAIL is not set in .env" if the variable is missing.
+- Data: 4 tiers from PLAN.md §3 (2999 / 4999 / 9999 / 49900 cents). Values not in the plan were picked here: Exclusive at 49900, Basic `videoLimit` 1 (non-profit), Trackout `videoLimit` 2. One ADMIN user. 12 PUBLISHED beats across 7 genres, 3 featured, fixed `plays`, original titles. 48 `BeatLicense` rows priced at each tier's default.
+- No audio or covers (user decision): every file key and `coverUrl` is empty. Phase 3 adds demo audio, and the §8 seed checkbox stays unticked until then.
+- Re-runs only add missing rows (`update: {}`). The admin's role is always set back to ADMIN.
+- Checks: first run printed 4 tiers / 12 beats / 48 licenses. psql showed the tier values as planned, 1 unverified ADMIN, 12 PUBLISHED beats (3 featured, none with files) and 0 price mismatches. A hand-edited price survived a second run with unchanged counts (then restored). `ADMIN_EMAIL=` gave the clear error and exit code 1. Lint, typecheck, test and build pass. `pnpm audit --audit-level=high` passes with the same 1 low + 1 moderate as before.
 
 ### 2026-11-07: `src/lib/db.ts` Prisma client singleton
 
