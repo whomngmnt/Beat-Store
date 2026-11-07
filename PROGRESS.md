@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 1 in progress. Schema and first migration committed (`eaae85b`). `@prisma/client` and `@prisma/adapter-pg` added.
+- **Stage:** Phase 1 in progress. Schema, first migration and the Prisma client packages committed. `src/lib/db.ts` written, waiting for review and commit.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 1: `src/lib/db.ts` (plan first), then `prisma/seed.ts`.
+- **Next step:** Phase 1: `prisma/seed.ts` (plan first). That task runs the first real queries through the client.
 
 ## Open questions
 
@@ -22,6 +22,17 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-07: `src/lib/db.ts` Prisma client singleton
+
+- `src/lib/db.ts` exports `db`, one `PrismaClient` built with the `@prisma/adapter-pg` driver adapter (Prisma 7 PostgreSQL docs). In dev it's cached on `globalThis`, so hot reloads reuse one connection pool instead of opening a new one each time.
+- The adapter is created inside the `??`, so a hot reload doesn't build an adapter that's never used (the docs example builds it outside).
+- Left out on purpose (user approved the plan): `import "server-only"` (it throws outside Next.js, which would block the seed script and Vitest), and an import-time check for `DATABASE_URL` (`next build` loads page modules in CI, where there's no `.env`). `pg` pool settings stay at their defaults until Neon (Phase 5).
+- `package.json`: `"postinstall": "prisma generate"`. The generated client is gitignored and Prisma 7's `migrate dev` doesn't generate it, so fresh clones, CI and Vercel would otherwise fail with "Cannot find module".
+- The generated entry file is `src/generated/prisma/client.ts` as expected, so the import path didn't need changing.
+- pnpm skips `postinstall` when the lockfile is already up to date, so on an existing checkout run `pnpm run postinstall` (or `pnpm prisma generate`) after changing the schema.
+- Checks: a fresh clone with no `.env` and `DATABASE_URL` unset ran `pnpm install --frozen-lockfile` (postinstall generated the client), then lint, typecheck, test and build passed. The same four pass in the working copy. No page imports `db` yet, so the build doesn't bundle it yet. Typecheck covers it.
+- For the seed task: `db.ts` uses the `@/` path alias and the generated client uses extensionless imports, so plain `node prisma/seed.ts` can't load it. The seed plan has to pick how to run TypeScript.
 
 ### 2026-11-07: PLAN.md §4 synced, Prisma client packages added
 

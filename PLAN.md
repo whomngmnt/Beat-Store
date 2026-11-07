@@ -304,7 +304,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 - [x] Write `schema.prisma` (section 4) and run `prisma migrate dev`
 - [ ] `seed.ts`: 4 license tiers, admin user, ~12 demo beats with royalty-free/own audio
-- [ ] `lib/db.ts` singleton
+- [x] `lib/db.ts` singleton
 
 ### Phase 2: Catalog & beat pages (days 4–7)
 
