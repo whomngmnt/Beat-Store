@@ -4,16 +4,44 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 0 done (commits `d9fec92`, `7b2d260`). Phase 1 not started.
+- **Stage:** Phase 1 in progress. Schema and first migration committed.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 1: Prisma schema, seed, `lib/db.ts`.
+- **Next step:** Phase 1: `src/lib/db.ts`, then `prisma/seed.ts`.
 
 ## Open questions
 
-- None right now.
+- The schema differs from PLAN.md §4 in a few places (see the 2026-11-07 log entry). Should §4 be updated to match?
+- Phase 3 needs hosted preview files before the R2 account exists (Phase 5). Serve demo previews from `public/` until then, or create R2 earlier?
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
+## Decisions needed later
+
+Recorded 2026-11-07. The user said not to change any code for these now.
+
+- **Guest download link (Phase 5 or 6).** Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
+- **Guest email (Phase 4 or 5).** Default: take it from Stripe Checkout after payment, which is why `Order.email` is optional. Asking for the email on the cart page before checkout is the alternative, only if the user changes the default.
+- **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
+
 ## Log
+
+### 2026-11-07: Phase 1 schema and first migration
+
+- `prisma/schema.prisma`: 9 models (User, Beat, LicenseTier, BeatLicense, Order, OrderItem, Download, Coupon, WebhookEvent) and 5 enums, from PLAN.md §4.
+- `pnpm prisma migrate dev --name init` created `prisma/migrations/20261107101113_init/migration.sql` and `migration_lock.toml`, and applied them to the local Docker database. `\dt` shows all 9 tables.
+- Prisma 7 checked against its docs: `migrate dev` no longer runs `prisma generate` or the seed. So no client was generated and no new dependency was needed for this step.
+- Lint, typecheck and test pass.
+- Decisions that go beyond or differ from §4 (all open to review):
+  - Every id is `@default(uuid())`, a random UUID v4, so no id can be guessed. Exception: `WebhookEvent.id` is Stripe's event id.
+  - `User` matches Better Auth's core user table (checked against its source): `name`, `email` unique, `emailVerified` boolean, `image?`, `createdAt`, `updatedAt`, plus our `role`. Session, Account and Verification tables come in Phase 7 with Better Auth's CLI.
+  - Optional because the §5.2 flow fills them later: `Order.stripeSessionId` (the order is created before the Stripe session), `stripePaymentIntentId`, `downloadTokenHash`, `downloadTokenExpiresAt`, `paidAt`, and `email` (see "Decisions needed later").
+  - Left out because they belong to later slices: `Order.emailSentAt` (email), `OrderItem.licensePdfKey` and the `LICENSE` file type (license PDF).
+  - `BeatLicense.priceCents` is required: the beat's real price for that tier, copied from the tier default and editable. Checkout reads one column instead of "override or default".
+  - `Beat.reservedByOrderId` is a real foreign key to `Order`, so it can't point at an order that doesn't exist.
+  - File keys on `Beat` are optional, because files are uploaded after the beat row exists. `description` defaults to an empty string.
+  - Unique: `Beat.slug`, `LicenseTier.code`, `Coupon.code`, `User.email`, plus the two `@@unique` pairs from §4.
+  - No `@map` to snake_case: the raw reservation SQL in `.claude/rules/exclusives.md` uses `"Beat"`, `"reservedByOrderId"` and `"reservedUntil"` as written.
+  - Coupons: "exactly one of `percentOff` / `amountOffCents`" is checked with Zod when a coupon is saved, not in the database.
+- Note: timestamps are Prisma's default `timestamp(3)` without time zone. That's safe while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`, so check the Neon time zone when it's set up in Phase 5.
 
 ### 2026-11-06: Phase 0 closed
 
@@ -94,7 +122,7 @@ Decisions:
 
 ## Up next: Phase 1 (PLAN.md §8)
 
-- [ ] `schema.prisma` with the models from PLAN.md §4, then `pnpm prisma migrate dev`
+- [x] `schema.prisma` with the models from PLAN.md §4, then `pnpm prisma migrate dev`
+- [ ] `src/lib/db.ts` Prisma client singleton (also add `prisma generate` to the workflow: Prisma 7 no longer runs it on `migrate dev`)
 - [ ] `prisma/seed.ts`: 4 license tiers, admin user, ~12 demo beats; add the `db:seed` script
-- [ ] `src/lib/db.ts` Prisma client singleton
 - Needs new dependencies (ask first): `@prisma/client` and `@prisma/adapter-pg` (Prisma 7 connects through a driver adapter), `tsx` (runs `seed.ts`)
