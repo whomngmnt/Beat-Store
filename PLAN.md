@@ -80,34 +80,50 @@ The project covers the full stack: **frontend, backend, database, file storage a
 
 ## 4. Data Model (Prisma schema outline)
 
+`?` = optional (can be empty). The real schema is `prisma/schema.prisma`; this outline matches it.
+
 ```
-User          id, email, emailVerified, name, role (USER|ADMIN), createdAt
-Beat          id, slug, title, description (plain text), bpm, musicalKey, genre, mood,
-              tags[], coverUrl, previewKey, mp3Key, wavKey, stemsKey,
-              status (DRAFT|PUBLISHED|RESERVED|SOLD), reservedByOrderId?,
+User          id, name, email (unique), emailVerified (boolean), image?, role (USER|ADMIN),
+              createdAt, updatedAt
+              ← Better Auth's core user fields plus role. Its Session, Account and
+                Verification tables are added in Phase 7.
+Beat          id, slug (unique), title, description (plain text, default ""), bpm, musicalKey,
+              genre, mood, tags[], coverUrl?, previewKey?, mp3Key?, wavKey?, stemsKey?,
+              status (DRAFT|PUBLISHED|RESERVED|SOLD), reservedByOrderId? (→ Order),
               reservedUntil?, plays, featured, createdAt
-LicenseTier   id, code (BASIC|PREMIUM|TRACKOUT|EXCLUSIVE), name, description,
+              ← file keys are empty until the admin uploads the files
+LicenseTier   id, code (unique: BASIC|PREMIUM|TRACKOUT|EXCLUSIVE), name, description,
               defaultPriceCents, includesMp3, includesWav, includesStems,
-              streamLimit, videoLimit, terms (text), sortOrder
-BeatLicense   id, beatId, licenseTierId, priceCents (override), active
+              streamLimit?, videoLimit? (null = unlimited), terms (text), sortOrder
+BeatLicense   id, beatId, licenseTierId, priceCents, active
               @@unique([beatId, licenseTierId])
-Order         id (UUID v4 / cuid2: unguessable, never sequential), userId?, email,
-              status (PENDING|PAID|EXPIRED|REFUNDED|FAILED),
-              stripeSessionId (unique), stripePaymentIntentId, totalCents,
-              currency, couponId?, downloadTokenHash (unique), downloadTokenExpiresAt,
-              fulfilledAt?, emailSentAt?, createdAt, paidAt
+              ← priceCents is this beat's price for the tier: copied from defaultPriceCents,
+                then editable by the admin
+Order         id, userId?, email?, status (PENDING|PAID|EXPIRED|REFUNDED|FAILED),
+              stripeSessionId? (unique), stripePaymentIntentId?, totalCents,
+              currency (default "usd"), couponId?, downloadTokenHash? (unique),
+              downloadTokenExpiresAt?, fulfilledAt?, createdAt, paidAt?
+              ← the order is created before the Stripe session, so the Stripe ids, token
+                and paidAt are filled in later. A guest's email comes from Stripe Checkout
+                after payment.
+              later slice (email): emailSentAt?
 OrderItem     id, orderId, beatId, licenseTierId, priceCents,
-              beatTitleSnapshot, licenseNameSnapshot, licensePdfKey?
-Download      id, orderItemId, fileType (MP3|WAV|STEMS|LICENSE), count, maxCount (default 5), lastAt
+              beatTitleSnapshot, licenseNameSnapshot
+              later slice (PDF): licensePdfKey?
+Download      id, orderItemId, fileType (MP3|WAV|STEMS), count, maxCount (default 5), lastAt?
               @@unique([orderItemId, fileType])
-Coupon        id, code, percentOff?, amountOffCents?, active, expiresAt
+              later slice (PDF): fileType LICENSE
+Coupon        id, code (unique), percentOff?, amountOffCents?, active, expiresAt? (null = never)
+              ← exactly one of percentOff / amountOffCents; Zod checks it when a coupon is saved
 WebhookEvent  id (Stripe event id, PRIMARY KEY → unique), type, processedAt
               ← inserted INSIDE the fulfilment transaction; a duplicate insert fails and rolls back
 ```
 
 Key rules:
 
-- Order IDs and download tokens are random and unguessable. Only the **SHA-256 hash** of the guest download token is stored; the raw token exists only in the email/success-page link.
+- Every id is a random **UUID v4** (`@default(uuid())`), so none can be guessed or counted through. The one exception is `WebhookEvent.id`, which is Stripe's event id.
+- Table and column names stay exactly as in the schema (no snake_case mapping), because raw SQL such as the reservation in §5.4 quotes them (`"Beat"`, `"reservedUntil"`).
+- Download tokens are random and unguessable. Only the **SHA-256 hash** of the guest download token is stored; the raw token exists only in the email/success-page link.
 - Prices are stored in **cents (integers)**, never floats.
 - `OrderItem` keeps a snapshot of title, license name and price, so later edits don't change past orders.
 - File columns hold **storage keys**, not public URLs. URLs are signed when a download is requested.

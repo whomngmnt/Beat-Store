@@ -4,13 +4,12 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 1 in progress. Schema and first migration committed.
+- **Stage:** Phase 1 in progress. Schema and first migration committed (`eaae85b`). `@prisma/client` and `@prisma/adapter-pg` added.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 1: `src/lib/db.ts`, then `prisma/seed.ts`.
+- **Next step:** Phase 1: `src/lib/db.ts` (plan first), then `prisma/seed.ts`.
 
 ## Open questions
 
-- The schema differs from PLAN.md §4 in a few places (see the 2026-11-07 log entry). Should §4 be updated to match?
 - Phase 3 needs hosted preview files before the R2 account exists (Phase 5). Serve demo previews from `public/` until then, or create R2 earlier?
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
@@ -23,6 +22,13 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-07: PLAN.md §4 synced, Prisma client packages added
+
+- PLAN.md §4 now matches `prisma/schema.prisma` (user decision): optional fields marked `?`, Better Auth user fields, UUID v4 ids, unique fields, and `emailSentAt`, `licensePdfKey` and the `LICENSE` file type kept as "later slice" notes so §5.2 still makes sense. Two key rules added: UUID ids, and no snake_case mapping.
+- Added `@prisma/client` and `@prisma/adapter-pg` (user approved), both `^7.10.1`, the same range as `prisma`, so all three stay on one 7.x version. The lockfile resolves all three to exactly 7.10.1. npm's `latest` tag for Prisma is now 7.10.1 (8.x is only on the `dev` tag).
+- Neither package has an install script, so `pnpm-workspace.yaml` is unchanged. `@prisma/adapter-pg` brings `pg` 8.23.1 and `@types/pg` as its own dependencies.
+- Checks: lint, typecheck and test pass. `pnpm audit --audit-level=high` passes (same 1 low + 1 moderate in dev tools as before). The only peer warning is the known ESLint 10 one.
 
 ### 2026-11-07: Phase 1 schema and first migration
 
@@ -125,4 +131,4 @@ Decisions:
 - [x] `schema.prisma` with the models from PLAN.md §4, then `pnpm prisma migrate dev`
 - [ ] `src/lib/db.ts` Prisma client singleton (also add `prisma generate` to the workflow: Prisma 7 no longer runs it on `migrate dev`)
 - [ ] `prisma/seed.ts`: 4 license tiers, admin user, ~12 demo beats; add the `db:seed` script
-- Needs new dependencies (ask first): `@prisma/client` and `@prisma/adapter-pg` (Prisma 7 connects through a driver adapter), `tsx` (runs `seed.ts`)
+- Dependencies: `@prisma/client` and `@prisma/adapter-pg` added. Still needs `tsx` for `seed.ts` (ask first).
