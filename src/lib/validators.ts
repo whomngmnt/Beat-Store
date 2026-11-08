@@ -40,3 +40,10 @@ export const catalogSearchSchema = z.object({
 });
 
 export type CatalogFilters = z.infer<typeof catalogSearchSchema>;
+
+// The slug in /beats/[slug]. Seeded and admin-made slugs use only lowercase
+// letters, digits and dashes, so anything else can't match a beat.
+export const beatSlugSchema = z
+  .string()
+  .max(100)
+  .regex(/^[a-z0-9-]+$/);

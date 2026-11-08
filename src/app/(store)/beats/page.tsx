@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { BeatCard } from "@/components/beats/BeatCard";
 import { BeatFilters } from "@/components/beats/BeatFilters";
 import { buttonVariants } from "@/components/ui/button";
 import { getCatalogPage, getFilterOptions } from "@/lib/catalog";
 import { catalogSearchSchema, type CatalogFilters } from "@/lib/validators";
+
+export const metadata: Metadata = { title: "Beats" };
 
 // Reading searchParams makes this page render on every request, so the
 // build never needs the database.

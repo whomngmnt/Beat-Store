@@ -1,8 +1,9 @@
-// Catalog queries for /beats. Filters come in already checked by
-// catalogSearchSchema (src/lib/validators.ts).
+// Catalog queries for /beats and /beats/[slug]. Filters come in already
+// checked by catalogSearchSchema (src/lib/validators.ts).
+import { cache } from "react";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import type { CatalogFilters } from "@/lib/validators";
+import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
 
 export const CATALOG_PAGE_SIZE = 9;
 
@@ -129,3 +130,57 @@ export async function getFilterOptions() {
 }
 
 export type FilterOptions = Awaited<ReturnType<typeof getFilterOptions>>;
+
+// What the beat page needs. The select lists every field, so the storage
+// keys (mp3Key, wavKey, stemsKey) are never loaded or sent to the browser.
+const beatDetailSelect = {
+  id: true,
+  slug: true,
+  title: true,
+  description: true,
+  bpm: true,
+  musicalKey: true,
+  genre: true,
+  mood: true,
+  tags: true,
+  status: true,
+  licenses: {
+    where: { active: true },
+    orderBy: { licenseTier: { sortOrder: "asc" } },
+    select: {
+      priceCents: true,
+      licenseTier: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          description: true,
+          includesMp3: true,
+          includesWav: true,
+          includesStems: true,
+          streamLimit: true,
+          videoLimit: true,
+          terms: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.BeatSelect;
+
+export type BeatDetail = Prisma.BeatGetPayload<{
+  select: typeof beatDetailSelect;
+}>;
+export type BeatDetailLicense = BeatDetail["licenses"][number];
+
+// One beat for /beats/[slug]: any beat the catalog shows, plus SOLD beats,
+// which get a page marked "Sold". A DRAFT beat or a bad slug gives null.
+// `cache` lets generateMetadata and the page share one query per request.
+export const getBeatBySlug = cache(async (rawSlug: string) => {
+  const slug = beatSlugSchema.safeParse(rawSlug);
+  if (!slug.success) return null;
+
+  return db.beat.findFirst({
+    where: { slug: slug.data, OR: [catalogWhere({}), { status: "SOLD" }] },
+    select: beatDetailSelect,
+  });
+});

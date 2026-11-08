@@ -223,6 +223,7 @@ Claude-code-project/
 │  │  ├─ (store)/page.tsx        # home
 │  │  ├─ (store)/beats/page.tsx
 │  │  ├─ (store)/beats/[slug]/page.tsx
+│  │  ├─ (store)/beats/[slug]/opengraph-image.tsx   # share image for social links
 │  │  ├─ (store)/cart/page.tsx
 │  │  ├─ (store)/checkout/success/page.tsx
 │  │  ├─ (store)/account/page.tsx
@@ -313,7 +314,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 - [x] Layout, header/nav, footer, dark theme
 - [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
-- [ ] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
+- [x] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
 - [ ] Home page sections
 
 ### Phase 3: Audio player (days 8–10)

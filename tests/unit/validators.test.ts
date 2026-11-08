@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogSearchSchema } from "../../src/lib/validators";
+import { beatSlugSchema, catalogSearchSchema } from "../../src/lib/validators";
 
 describe("catalogSearchSchema", () => {
   it("uses the defaults when the URL has no params", () => {
@@ -65,5 +65,22 @@ describe("catalogSearchSchema", () => {
 
   it("falls back to page 1 for a page that's too big", () => {
     expect(catalogSearchSchema.parse({ page: "1001" }).page).toBe(1);
+  });
+});
+
+describe("beatSlugSchema", () => {
+  it("accepts a slug of lowercase letters, digits and dashes", () => {
+    expect(beatSlugSchema.safeParse("midnight-drive-2").success).toBe(true);
+    expect(beatSlugSchema.safeParse("a".repeat(100)).success).toBe(true);
+  });
+
+  it.each([
+    "",
+    "Midnight-Drive",
+    "midnight drive",
+    "../admin",
+    "a".repeat(101),
+  ])("rejects %j", (slug) => {
+    expect(beatSlugSchema.safeParse(slug).success).toBe(false);
   });
 });

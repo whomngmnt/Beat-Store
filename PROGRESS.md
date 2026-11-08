@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 2. The layout is committed (`3952492`). `BeatCard` and the `/beats` catalog page are done and waiting for review and commit. Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
+- **Stage:** Phase 2. The layout (`3952492`) and the `/beats` catalog (`5983fb6`) are committed. The beat detail page `/beats/[slug]` is done and waiting for review and commit. Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 2: beat detail page `/beats/[slug]` with `LicenseTable`, `LicenseSelector` and SEO metadata (plan first).
+- **Next step:** Phase 2: home page sections (plan first). That's the last Phase 2 item.
 
 ## Open questions
 
@@ -23,6 +23,22 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-08: Beat detail page `/beats/[slug]`
+
+- `src/app/(store)/beats/[slug]/page.tsx`: a server page. On the left is the same cover placeholder as `BeatCard`, with an "Exclusive reserved" or "Sold" badge. On the right: title, genre · mood · BPM · key, all tags, the description as plain text (`whitespace-pre-line`, escaped by React), then the `LicenseSelector`. Below, a "What's included" section holds the `LicenseTable`. There's no `generateStaticParams`, so the page renders per request (`ƒ` in the build): status and prices are always current, and the build never needs the database.
+- Who sees what (user decision: SOLD gets a page): beats the catalog shows (PUBLISHED or RESERVED with at least one active license) get the full page. SOLD beats get the page with a "Sold" notice, but no selector and no table. A DRAFT beat, a beat with no active license, an unknown slug or a badly formed slug gives a 404. The catalog still hides SOLD beats.
+- `src/lib/catalog.ts`: `getBeatBySlug(slug)`. It checks the slug with Zod, then runs `findFirst` with `OR: [catalogWhere({}), { status: "SOLD" }]`, so the catalog's visibility rule still lives in one place. Active licenses are sorted by the tier's `sortOrder`. An explicit `select` keeps `mp3Key`, `wavKey` and `stemsKey` out of the query, so they can't reach the browser. React `cache` lets `generateMetadata` and the page share one query per request.
+- `src/lib/validators.ts`: `beatSlugSchema`, made of lowercase letters, digits and `-`, at most 100 characters. Tested in `tests/unit/validators.test.ts`.
+- `src/components/beats/LicenseSelector.tsx`: a client component (`useState`). It's a `<fieldset>` of native radio buttons styled as cards, each showing tier name, price and short description. The value is the `licenseTierId`, which is what the Phase 4 cart stores. On a RESERVED beat, Exclusive is disabled with "Reserved, check back soon". The selected tier's `terms` text shows below. There's no "Add to cart" button yet (user OK'd it): it comes in Phase 4.
+- `src/components/beats/LicenseTable.tsx`: a server component and a plain `<table>`. It has one column per active tier (name and price), and rows for MP3, WAV, Stems (ZIP), Streams and Music videos. `null` limits show as "Unlimited". Check and dash icons have screen-reader text. It scrolls sideways on narrow screens.
+- SEO: `generateMetadata` sets the title (`Midnight Drive – Trap beat · Beat Store`) and the description (the beat's description + BPM · key + "Licenses from $X", or "Sold with exclusive rights."). It also sets the canonical URL, `openGraph` (title, description, url, `type: "website"`) and `twitter.card: "summary_large_image"`. Next.js fills the `twitter:` title, description and image from the Open Graph data.
+- `src/app/(store)/beats/[slug]/opengraph-image.tsx`: a 1200×630 PNG made with `ImageResponse` from `next/og`. It's built into Next, so there's no new package, and it uses the default font. It shows "Beat Store", the title, genre · BPM · key, and "From $X" or "Sold" in the dark theme colours. An unknown beat gives a 404. Added to the PLAN.md §6 tree.
+- `src/app/layout.tsx`: `metadataBase` from `NEXT_PUBLIC_SITE_URL` (already in `.env.example`; it falls back to `http://localhost:3000` when the variable is unset or empty, as in CI), plus the title template `%s · Beat Store`. `src/app/(store)/beats/page.tsx` now has the title "Beats" (user decision).
+- Checks: lint, typecheck, 12 tests and build pass. The build shows `/beats/[slug]` and its `opengraph-image` as `ƒ`. Against `pnpm start` on port 3001: a seeded slug returned 200 with all the tags above, and the HTML had no storage keys. An unknown slug, an uppercase slug, `..%2Fadmin` and `a%20b` returned 404. The share image returned `image/png` and looked right, and a missing beat's image returned 404. 5 rows in the local database were changed for the test, then restored (12 PUBLISHED, 48 active licenses afterwards). Results: RESERVED disabled only Exclusive, SOLD showed the notice without selector or table (and "Sold" on the share image), DRAFT and "no active license" gave 404, and a `<script>` description came out as escaped text.
+- Not tested in a real browser: clicking the radio buttons and seeing the terms change.
+- Note: a `pnpm dev` server that was already running on port 3123 started returning 500 for every page while I ran `pnpm build`. Its log shows "Jest worker encountered 2 child process exceptions". I left it running because I didn't start it. Restart it (Ctrl+C, then `pnpm dev`) to fix it. In future, don't run `pnpm build` while `pnpm dev` is running.
+- Left out on purpose (other roadmap items): waveform and play button (Phase 3), "Add to cart" (Phase 4), similar beats (PLAN §3 mentions them, but no roadmap item does yet), JSON-LD (Phase 9), cover images (Phase 8).
 
 ### 2026-11-08: `BeatCard` and the `/beats` catalog page
 
@@ -180,5 +196,5 @@ Decisions:
 
 - [x] Layout, header/nav, footer, dark theme
 - [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
-- [ ] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
+- [x] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
 - [ ] Home page sections
