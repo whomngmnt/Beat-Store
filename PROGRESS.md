@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 2 started. Layout, header, footer and dark theme are done and waiting for review and commit. Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
+- **Stage:** Phase 2. The layout is committed (`3952492`). `BeatCard` and the `/beats` catalog page are done and waiting for review and commit. Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 2: `BeatCard` and the catalog page `/beats` (plan first).
+- **Next step:** Phase 2: beat detail page `/beats/[slug]` with `LicenseTable`, `LicenseSelector` and SEO metadata (plan first).
 
 ## Open questions
 
@@ -23,6 +23,21 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-08: `BeatCard` and the `/beats` catalog page
+
+- `src/app/(store)/beats/page.tsx`: a server page. Filters, search, sort and page live in the URL (`/beats?genre=Trap&sort=popular&page=2`). It parses `searchParams` with Zod, runs the query and renders the result count, filters, a 3-column grid, an empty state and Previous / "Page X of Y" / Next links. Reading `searchParams` makes it render per request (`ƒ` in the build), so the build never touches the database.
+- `src/lib/validators.ts`: `catalogSearchSchema`. Every field has `.catch()`, so junk (`?page=-1`, `?bpmMin=abc`, a repeated `?genre=`, an unknown sort) is ignored and `parse` never throws. Empty form fields count as "not set". Limits: text 50 chars, search 100, BPM 1–300, max price $1–$100,000, page 1–1000.
+- `src/lib/catalog.ts` (new, added to PLAN.md §6): `getCatalogPage()` and `getFilterOptions()`. Shown beats: PUBLISHED or RESERVED with at least one active license. DRAFT and SOLD never show. RESERVED stays listed because leases can still be bought. Unset filters are `undefined`, which Prisma ignores. Search matches part of the title (any case) or one whole tag. 9 beats per page. `id` breaks sort ties so pages never repeat or skip a beat.
+- Price sort (approved plan): Prisma can't order beats by their cheapest license, so a `groupBy` on `BeatLicense` gets each beat's lowest active price, sorts and pages it, and a second query loads those beats in that order. No schema change.
+- Max price is whole dollars in the URL, multiplied by 100 on the server. It matches beats with any active license at or under it, which is the card's "From" price.
+- `src/components/beats/BeatFilters.tsx`: a GET form with `next/form` (built into Next, no new package, no client state). It has no page field, so applying filters goes back to page 1. A `key` built from the filters re-mounts the form when the URL changes (Clear, back button), because uncontrolled inputs only read `defaultValue` once.
+- `src/components/beats/BeatCard.tsx`: placeholder cover (covers come with uploads, Phase 8), title linked to `/beats/[slug]` (404 until the detail page), genre · mood, BPM · key, up to 3 tags, "From $X", and an "Exclusive reserved" badge. Badges are spans with `badgeVariants`, because shadcn's `<Badge>` calls a Base UI hook from a module that isn't a client component.
+- `src/lib/pricing.ts`: `formatPrice(cents)`. The only place cents are divided by 100, and only for display.
+- Added: `zod` 4.6.7 (in the stack). shadcn `card`, `badge`, `input`, `native-select` (they only need `cn`, already installed; formatted with Prettier). `pnpm test` no longer has `--passWithNoTests`, because tests exist now.
+- Tests: `tests/unit/validators.test.ts` (defaults, valid values, empty fields, junk, page too big) and `tests/unit/pricing.test.ts`. They import with relative paths, so Vitest needs no alias config.
+- Checks: lint, typecheck, 6 tests and build pass. Against the dev server: each sort, page 2, every filter, title and tag search, `F#` in a key, a page past the end, and junk and empty params all gave the expected beats. For price sort, max price, the RESERVED badge and hiding SOLD, 4 rows in the local database were changed for the test and then restored (12 PUBLISHED, 0 prices off their default afterwards). Not tested in a real browser: clicking Apply and Clear (client-side navigation and the form re-mount).
+- Not done on purpose: sort applies only on Apply (auto-apply needs a client component, Phase 9), no page title (SEO item), no play button (Phase 3), empty fields still appear in the URL (`?q=&genre=Trap`).
 
 ### 2026-11-08: Store layout, header, footer, dark theme
 
@@ -164,6 +179,6 @@ Decisions:
 ## Up next: Phase 2 (PLAN.md §8)
 
 - [x] Layout, header/nav, footer, dark theme
-- [ ] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params). Needs Zod for the search params (in the stack, not installed yet).
+- [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
 - [ ] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
 - [ ] Home page sections

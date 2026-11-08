@@ -243,6 +243,7 @@ Claude-code-project/
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
+│  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination
 │  │  ├─ stripe.ts
 │  │  ├─ storage.ts              # S3/R2 client, signUrl(), presignUpload()
 │  │  ├─ auth.ts
@@ -311,7 +312,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ### Phase 2: Catalog & beat pages (days 4–7)
 
 - [x] Layout, header/nav, footer, dark theme
-- [ ] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
+- [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
 - [ ] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
 - [ ] Home page sections
 
