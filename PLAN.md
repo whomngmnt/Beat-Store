@@ -219,6 +219,7 @@ Claude-code-project/
 ├─ public/                       # logo, placeholder covers
 ├─ src/
 │  ├─ app/
+│  │  ├─ (store)/layout.tsx      # header + footer (store pages only, not admin)
 │  │  ├─ (store)/page.tsx        # home
 │  │  ├─ (store)/beats/page.tsx
 │  │  ├─ (store)/beats/[slug]/page.tsx
@@ -233,8 +234,9 @@ Claude-code-project/
 │  │  ├─ api/auth/[...all]/route.ts              # Better Auth handler
 │  │  ├─ api/cron/fulfilment-retry/route.ts      # retry post-commit side effects: refunds (emails/PDFs in later slices), CRON_SECRET protected
 │  │  ├─ api/cron/release-reservations/route.ts  # free expired exclusive reservations
-│  │  └─ layout.tsx              # includes <PlayerBar/>
+│  │  └─ layout.tsx              # root: <html class="dark">, fonts; includes <PlayerBar/>
 │  ├─ components/
+│  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
 │  │  ├─ player/PlayerBar.tsx, Waveform.tsx
 │  │  ├─ beats/BeatCard.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
 │  │  ├─ cart/CartDrawer.tsx
@@ -308,7 +310,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 2: Catalog & beat pages (days 4–7)
 
-- [ ] Layout, header/nav, footer, dark theme
+- [x] Layout, header/nav, footer, dark theme
 - [ ] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
 - [ ] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
 - [ ] Home page sections
