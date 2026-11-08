@@ -315,7 +315,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [x] Layout, header/nav, footer, dark theme
 - [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
 - [x] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
-- [ ] Home page sections
+- [x] Home page sections
 
 ### Phase 3: Audio player (days 8–10)
 

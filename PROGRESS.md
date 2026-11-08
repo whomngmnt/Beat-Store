@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 2. The layout (`3952492`) and the `/beats` catalog (`5983fb6`) are committed. The beat detail page `/beats/[slug]` is done and waiting for review and commit. Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
+- **Stage:** Phase 2 is done. The layout (`3952492`), the `/beats` catalog (`5983fb6`) and the beat detail page (`5513863`) are committed. The home page sections are done and waiting for review and commit. `develop` is 2 commits ahead of `origin` (not pushed yet). Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 2: home page sections (plan first). That's the last Phase 2 item.
+- **Next step:** Phase 3: audio player (plan first). The open question below about where demo previews live needs an answer first.
 
 ## Open questions
 
@@ -23,6 +23,26 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-08: Home page sections
+
+- `src/app/(store)/page.tsx` replaces "Hello world!" with four sections:
+  - **Hero:** heading, one line of text and a "Browse beats" button. There's no Licenses button while `/licenses` is a 404.
+  - **Featured:** up to 3 featured beats as `BeatCard`s. The section is hidden when none are featured.
+  - **New releases:** the 6 newest beats, with a "View all" link to `/beats` (newest first by default).
+  - **Browse by genre:** one link per genre, such as `/beats?genre=Trap`. `URLSearchParams` builds the URL, so `R&B` becomes `R%26B` and `Boom Bap` becomes `Boom+Bap`.
+  - With no beats on show at all, the page shows the hero and "No beats yet, check back soon."
+- `await connection()` (from `next/server`, recommended in the Next 16 docs) at the top of the page makes it render per request. Without it, `pnpm build` would prerender `/` with the database (CI has none) and the page would never update. The build now shows `ƒ /` instead of `○ /`.
+- `src/lib/catalog.ts`: `getFeaturedBeats()` (featured, take 3) and `getNewestBeats()` (take 6). Both reuse `catalogWhere({})`, `beatCardSelect` and the newest-first order, so the visibility rule stays in one place. The genre list reuses `getFilterOptions()`.
+- A featured beat can also appear in New releases if it's one of the 6 newest. With the seed data they don't overlap, because the featured beats are the oldest.
+- The two card grids repeat the `/beats` grid markup (about 7 lines each). It's kept inline rather than becoming a new component.
+- No new unit tests: the new code is database queries and markup, with no pure logic.
+- Checks: lint, typecheck, 12 tests and build pass. Against `pnpm start` on port 3001: Featured and New releases matched a direct SQL query, and all 7 genres were linked. The `R&B`, `Boom Bap` and `Trap` links showed the right beats. Then rows were changed for the test and restored (12 PUBLISHED, same 3 featured afterwards):
+  - A DRAFT beat and two SOLD beats (one of them featured) disappeared from both grids and the genre list.
+  - No featured beats hid the Featured section.
+  - Every beat DRAFT showed "No beats yet".
+- Note: stopping a background `pnpm start` task on Windows left its child `node` process running on port 3001. It was found and stopped by PID after both test runs. The dev server on port 3123 is still crashing on some pages from the earlier build; the user will restart it.
+- Not done on purpose: play buttons on cards (Phase 3), real "type" tags like "Travis Scott type" (no such field; genre links stand in), hero artwork.
 
 ### 2026-11-08: Beat detail page `/beats/[slug]`
 
@@ -192,9 +212,11 @@ Decisions:
 
 - `PLAN.md`: full plan covering features, data model, flows, security checklist, roadmap and definition of done.
 
-## Up next: Phase 2 (PLAN.md §8)
+## Up next: Phase 3 (PLAN.md §8)
 
-- [x] Layout, header/nav, footer, dark theme
-- [x] `BeatCard`, catalog page with server-side filtering/search/sort/pagination (URL search params)
-- [x] Beat detail page with metadata, `LicenseTable`, `LicenseSelector`, SEO metadata + Open Graph image
-- [ ] Home page sections
+- [ ] Zustand `player` store (current track, queue, isPlaying, progress)
+- [ ] `PlayerBar` in the root layout using a single `<audio>` element
+- [ ] `Waveform` with wavesurfer.js on the beat page, synced to the global player
+- [ ] Increment `plays` (debounced, server action) after 10s of listening
+- [ ] Install ffmpeg
+- [ ] `scripts/make-preview.ts` ffmpeg pipeline

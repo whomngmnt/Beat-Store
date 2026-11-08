@@ -115,6 +115,26 @@ async function getBeatsByPrice(
   return beats.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 }
 
+// Home page: up to 3 beats the admin marked as featured, newest first.
+export async function getFeaturedBeats() {
+  return db.beat.findMany({
+    where: { ...catalogWhere({}), featured: true },
+    select: beatCardSelect,
+    orderBy: orderBy.newest,
+    take: 3,
+  });
+}
+
+// Home page: the 6 newest beats on show.
+export async function getNewestBeats() {
+  return db.beat.findMany({
+    where: catalogWhere({}),
+    select: beatCardSelect,
+    orderBy: orderBy.newest,
+    take: 6,
+  });
+}
+
 // Dropdown choices: the genres, moods and keys of the beats on show.
 export async function getFilterOptions() {
   const beats = await db.beat.findMany({
