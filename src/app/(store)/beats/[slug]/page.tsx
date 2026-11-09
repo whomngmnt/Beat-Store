@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import { AudioLines } from "lucide-react";
 import { LicenseSelector } from "@/components/beats/LicenseSelector";
 import { LicenseTable } from "@/components/beats/LicenseTable";
+import { PlayButton } from "@/components/player/PlayButton";
+import { Waveform } from "@/components/player/Waveform";
 import { badgeVariants } from "@/components/ui/badge";
 import { getBeatBySlug } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
+import { previewUrl } from "@/lib/storage";
+import type { Track } from "@/store/player";
 
 // There's no generateStaticParams, so this page renders on every request:
 // status and prices are always current, and the build never needs the
@@ -45,6 +49,16 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
   if (!beat) notFound();
 
   const sold = beat.status === "SOLD";
+  // A sold exclusive belongs to its buyer, so its preview no longer plays.
+  const track: Track | null =
+    beat.previewKey && !sold
+      ? {
+          id: beat.id,
+          slug: beat.slug,
+          title: beat.title,
+          previewUrl: previewUrl(beat.previewKey),
+        }
+      : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -79,6 +93,14 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
               ))}
             </ul>
           </div>
+
+          {/* The queue is just this beat, so Next is off in the player bar. */}
+          {track && (
+            <div className="flex items-center gap-4">
+              <PlayButton queue={[track]} index={0} className="size-12" />
+              <Waveform track={track} className="h-16 min-w-0 flex-1" />
+            </div>
+          )}
 
           {/* Plain text: React escapes it, and line breaks stay visible. */}
           {beat.description && (

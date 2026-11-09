@@ -154,11 +154,13 @@ export async function getFilterOptions() {
 export type FilterOptions = Awaited<ReturnType<typeof getFilterOptions>>;
 
 // What the beat page needs. The select lists every field, so the storage
-// keys (mp3Key, wavKey, stemsKey) are never loaded or sent to the browser.
+// keys of the full files (mp3Key, wavKey, stemsKey) are never loaded or sent
+// to the browser. Only the public preview's key is.
 const beatDetailSelect = {
   id: true,
   slug: true,
   title: true,
+  previewKey: true,
   description: true,
   bpm: true,
   musicalKey: true,

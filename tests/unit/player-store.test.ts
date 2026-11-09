@@ -38,6 +38,13 @@ describe("playQueue", () => {
     expect(audio.play).toHaveBeenCalledOnce();
   });
 
+  it("can start part-way through the track", () => {
+    player().playQueue(queue, 0, 42);
+    expect(audio.currentTime).toBe(42);
+    expect(player().currentTime).toBe(42);
+    expect(audio.play).toHaveBeenCalledOnce();
+  });
+
   it("ignores an index outside the queue", () => {
     player().playQueue(queue, 5);
     expect(player().index).toBe(-1);

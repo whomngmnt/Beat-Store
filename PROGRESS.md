@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 3, task 2 of 4 (player store, `PlayerBar`, play buttons) is done and waiting for review and commit. Playback has not been tested in a real browser yet (see the log). Task 1 is committed as `84b2647`. `develop` is 1 commit ahead of `origin` (not pushed). The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 3, task 3 of 4 (`Waveform`) is done and waiting for review and commit. The user asked for it to be built without a plan first. Tasks 1 and 2 are committed (`84b2647`, `d6ab260`). `develop` is 2 commits ahead of `origin` (not pushed). Playback and the waveform haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** a browser check of playback (Claude in Chrome once its tools are enabled with `/chrome`, or by hand), then review and commit task 2. Then task 3: `Waveform` (detailed file plan first).
+- **Next step:** review and commit task 3, a browser check of tasks 2 and 3 (`/chrome` to enable Claude in Chrome, or by hand), then task 4: count plays.
 
 ## Open questions
 
@@ -22,6 +22,31 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-09: Phase 3 task 3: `Waveform` on the beat page
+
+Built without a separate plan, at the user's request. It follows the Phase 3 plan for task 3.
+
+- Added `wavesurfer.js` **8.0.3**, pinned exactly. 8.0.4 and 8.0.5 were under 2 weeks old (same rule as zustand), and a `~8.0.3` range would have installed 8.0.5 anyway. Checked in the 8.0.3 package source:
+  - Importing it doesn't touch `window` or `document`, so server rendering is fine.
+  - A click seeks wavesurfer's own idle media element and emits `interaction`, but never starts playback.
+  - A failed load is caught inside the library and emitted as an `error` event, so there's no unhandled promise.
+- `src/components/player/Waveform.tsx` (client):
+  - **Setup:** wavesurfer is created in `useEffect` with the preview's `url` and destroyed on unmount. Bars are 2 px, the cursor is hidden, and it's 64 px tall.
+  - **Colours:** the canvas can't read CSS variables, so the colours are read once with `getComputedStyle`. Unplayed is `--ring` (mid grey) and played is `--primary` (near white). `--muted-foreground` was too close to white to tell them apart.
+  - **Never plays:** wavesurfer gets its own idle media element. Giving it the global `<audio>` would change that element's `src` to this beat and cut off whatever is playing.
+  - **Follows the player:** a `usePlayerStore.subscribe` listener (no React re-render) plus the `ready` event call `setTime`. It shows the player's time when this beat is the current track and 0 otherwise, and is skipped until the waveform is drawn.
+  - **Clicks:** `interaction` seeks the global player if this beat is loaded. Otherwise it calls `playQueue([track], 0, clickedTime)`.
+  - **Accessibility:** the drawing is `aria-hidden`. Keyboard users have the play button next to it and the bar's seek slider.
+- `src/store/player.ts`: `playQueue(queue, index, startAt = 0)`. `load` sets the store's `currentTime` to `startAt`, then sets `audio.currentTime` right after `src`. While the file hasn't loaded, the HTML spec treats that as the start position, and reading `currentTime` returns it. So the store and the element agree from the start, and the waveform doesn't jump back to 0. next/prev still start at 0. New store test: start part-way through.
+- Beat page `src/app/(store)/beats/[slug]/page.tsx`: a large `PlayButton` and the `Waveform` above the description. The queue is just this beat, so Next is off in the bar. They're not shown on a SOLD beat (its preview belongs to the buyer now) or on a beat without a preview. `beatDetailSelect` now loads `previewKey`; the full-file keys are still never loaded.
+- PLAN.md §8: Waveform box ticked (§6 already listed `Waveform.tsx`).
+- Checks:
+  - Prettier, lint, typecheck, 22 tests and build pass.
+  - Against `pnpm start` on port 3001: the PUBLISHED and RESERVED beat pages (status changed for the test) returned 200 with "Play …", the waveform container and their own preview URL. The SOLD beat page had no button, no waveform and no preview URL. No full-file keys appeared. Restored to 12 PUBLISHED.
+  - The wavesurfer chunk is referenced only by the beat page, not by `/` or `/beats`.
+- **Not tested yet:** in a real browser, check that the waveform draws, follows the bar while playing, resets when another beat plays, and that a click seeks the current beat or starts a different one at the clicked spot.
+- Note: clicking the waveform of a beat that's loaded but paused only seeks. It doesn't resume. Clicking a beat that isn't loaded starts it.
 
 ### 2026-11-09: Phase 3 task 2: player store, `PlayerBar`, play buttons
 
@@ -275,6 +300,6 @@ Decisions:
 ## Up next: Phase 3 (PLAN.md §8)
 
 - [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (`84b2647`)
-- [x] Task 2 (waiting for browser check and review): `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
-- [ ] Task 3: `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
+- [x] Task 2 (`d6ab260`, browser check still to do): `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
+- [x] Task 3 (waiting for review): `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
 - [ ] Task 4: `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.

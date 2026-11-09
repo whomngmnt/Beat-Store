@@ -25,7 +25,7 @@ type PlayerState = {
   currentTime: number; // seconds
   duration: number; // seconds, 0 until the file's length is known
   volume: number; // 0 to 1
-  playQueue: (queue: Track[], index: number) => void;
+  playQueue: (queue: Track[], index: number, startAt?: number) => void;
   toggle: () => void;
   next: () => void;
   prev: () => void;
@@ -34,15 +34,18 @@ type PlayerState = {
 };
 
 export const usePlayerStore = create<PlayerState>()((set, get) => {
-  // Makes queue[index] the current track and starts playing it.
-  function load(queue: Track[], index: number) {
+  // Makes queue[index] the current track and plays it from `startAt`
+  // seconds.
+  function load(queue: Track[], index: number, startAt = 0) {
     const track = queue[index];
     if (!track) return;
-    set({ queue, index, currentTime: 0, duration: 0 });
+    set({ queue, index, currentTime: startAt, duration: 0 });
 
     const { audio } = get();
     if (!audio) return;
     audio.src = track.previewUrl;
+    // The file hasn't loaded yet, so this sets where playback will start.
+    audio.currentTime = startAt;
     // play() rejects when a newer track interrupts it or the file can't
     // play. Nothing to do then: the element's events keep the state right.
     audio.play().catch(() => {});
