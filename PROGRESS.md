@@ -4,13 +4,12 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 2 is done. The layout (`3952492`), the `/beats` catalog (`5983fb6`) and the beat detail page (`5513863`) are committed. The home page sections are done and waiting for review and commit. `develop` is 2 commits ahead of `origin` (not pushed yet). Phase 1 is committed (seed: `14c8662`); its PLAN.md §8 seed box stays unticked until Phase 3 adds demo audio (user decision).
+- **Stage:** Phase 3 has started (4 tasks, see "Up next"). Task 1 (ffmpeg, `make-preview.ts`, seed previews) is done and waiting for review and commit. The local database has all 12 demo beats with placeholder previews. Phase 2 is committed and pushed (`120c68f`, `develop` matches `origin`). The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** Phase 3: audio player (plan first). The open question below about where demo previews live needs an answer first.
+- **Next step:** the user reviews and OKs task 1 for commit. Then task 2: player store, `PlayerBar`, play buttons (detailed file plan first).
 
 ## Open questions
 
-- Phase 3 needs hosted preview files before the R2 account exists (Phase 5). Serve demo previews from `public/` until then, or create R2 earlier?
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
 ## Decisions needed later
@@ -23,6 +22,42 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-09: Phase 3 plan, and task 1: ffmpeg, preview script, seed previews
+
+Phase 3 plan (user approved): 4 tasks, each reviewed and committed on its own. (1) ffmpeg + `make-preview.ts` + seed previews, (2) player store + `PlayerBar` + play buttons, (3) `Waveform`, (4) play counting. Task 1 comes first because the player needs something to play. User decisions:
+
+- Previews are served from `public/previews/<slug>.mp3` until R2 exists. `previewKey` is `previews/<slug>.mp3`, and in task 2 the URL becomes `PUBLIC_CDN_URL` + key, or `/` + key while that variable is empty. PLAN.md §5.1 has a note.
+- Demo audio: source WAVs live in `audio-src/`, which is gitignored, so full files never reach the public repo. The user has no beats ready yet and will add their own later, so for now there are placeholders (see below).
+- Producer tag: a placeholder, `audio-src/tag.wav`, a spoken "Beat Store" made once with Windows' built-in speech voice (`System.Speech` in `powershell.exe` 5.1, no new dependency). Swap in a real tag and re-run the script any time.
+- Previews are **not** committed. `public/previews/` is gitignored, so a fresh clone has no sound until previews are generated. They move to R2 in Phase 5.
+
+Task 1:
+
+- ffmpeg **9.0.2** installed with `winget install Gyan.FFmpeg` (full build, has `libmp3lame`). winget added its `bin` folder to the user PATH, so only terminals opened afterwards find `ffmpeg`. CI and Vercel never need it.
+- `scripts/make-preview.ts` (run with `pnpm make-preview`, new script in `package.json`):
+  - **Input:** a file or a folder. A folder means every `.wav`/`.mp3`/`.flac`/`.aif(f)` in it except the tag, because PowerShell doesn't expand `*.wav`.
+  - **Options:** `--out` (default `public/previews`), `--tag` (default `audio-src/tag.wav`), `--start` (default 0), `--length` (default 90, capped at what's left of the file). Read with Node's built-in `parseArgs`.
+  - **Names:** the output is `<source name>.mp3`. Every source name must be a valid slug (reuses `beatSlugSchema`), checked before any file is made.
+  - **ffmpeg:** run with `execFile` (no shell). `ffprobe` gets the length first. Both inputs become 44.1 kHz stereo. The tag is padded to 20 s and looped (`apad` + `aloop`), then mixed at full volume (`amix normalize=false`). `alimiter` keeps the sum from clipping, `afade` fades out the last 3 s. The result is 128 kbps MP3 with `-map_metadata -1`, so the source's tags aren't copied. `prettier-ignore` keeps each ffmpeg flag on one line with its value.
+  - **Errors:** clear messages for ffmpeg missing, a bad number, a missing tag, no input, a start past the end and a bad file name. Exit code 1.
+- `prisma/seed.ts`: for each demo beat, if `public/previews/<slug>.mp3` exists, an `updateMany ... where previewKey: null` sets `previewKey = previews/<slug>.mp3`. It only fills a missing key, so a re-run never overwrites one, and it works on an existing database without `migrate reset`. The summary line now says how many beats have a preview.
+- `.gitignore`: `/audio-src/` and `/public/previews/`.
+- PLAN.md: §5.1 note, §6 tree (`audio-src/`, `public/previews/`), §8 "Install ffmpeg" and "make-preview" ticked.
+- Checks on synthetic audio in the scratchpad (nothing real or in git):
+  - A 120 s source with a title and comment gave exactly 90.0 s, 128 kbps, 44.1 kHz stereo, with only ffmpeg's own `encoder` tag left.
+  - A silent source showed the tag at 0, 20, 40 and 60 s (`silencedetect`).
+  - A full-scale source peaked at −0.8 dBFS (no clipping), and the last 0.5 s is faded.
+  - `--start 100` gave 20 s. All 6 error cases printed their message and exited 1.
+  - Folder mode skipped `tag.wav` and a `.txt` file, and a badly named file stopped the run before anything was made.
+  - Seed against local Docker: 0 previews → "0 with a preview". One test file → `midnight-drive` got its key. A key changed by hand survived a re-run. Restored afterwards (0 previews, 12 PUBLISHED).
+  - Lint, typecheck and 12 tests pass. No new unit tests: the script is a thin wrapper around ffmpeg, checked with ffprobe above.
+- **Placeholder demo audio** (one-off, nothing committed):
+  - **What it is:** 12 WAVs, `audio-src/<slug>.wav`, made with ffmpeg's `aevalsrc`. Each is 95 s mono: a plucked root-third-fifth chord in the beat's key, one pluck per beat at its BPM, so each beat sounds different when testing the player. The expression is `0.25*(sin(2πrt)+sin(2πr·third·t)+sin(2πr·1.4983·t))·exp(−5·mod(t·bpm/60, 1))`, where the third is 1.1892 for minor and 1.2599 for major.
+  - **Result:** `pnpm make-preview audio-src` made 12 previews of 90 s each, and the tag was skipped. `pnpm db:seed` then reported "12 with a preview", and every key is `previews/<slug>.mp3`.
+  - **To use real beats later:** put `audio-src/<slug>.wav` in place and run `pnpm make-preview audio-src` again. The seed doesn't need to run again, because the key stays the same.
+- Added `-nostdin` to the script's ffmpeg call. The first placeholder loop showed that, without it, ffmpeg reads stdin as keyboard commands (it swallowed the loop's input and mangled 10 file names; those files were deleted and remade). The script's own runs weren't affected, but the flag is ffmpeg's documented way to run non-interactively.
+- Note: the Claude permission guard blocks `Remove-Item` on any path containing `public`. It treats it as a system path. The test tone at `public/previews/midnight-drive.mp3` couldn't be deleted, but the placeholder preview overwrote it.
 
 ### 2026-11-08: Home page sections
 
@@ -214,9 +249,7 @@ Decisions:
 
 ## Up next: Phase 3 (PLAN.md §8)
 
-- [ ] Zustand `player` store (current track, queue, isPlaying, progress)
-- [ ] `PlayerBar` in the root layout using a single `<audio>` element
-- [ ] `Waveform` with wavesurfer.js on the beat page, synced to the global player
-- [ ] Increment `plays` (debounced, server action) after 10s of listening
-- [ ] Install ffmpeg
-- [ ] `scripts/make-preview.ts` ffmpeg pipeline
+- [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (waiting for review)
+- [ ] Task 2: `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
+- [ ] Task 3: `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
+- [ ] Task 4: `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.

@@ -7,11 +7,15 @@
 // whose role is always set back to ADMIN. To start over:
 // `pnpm prisma migrate reset`, then `pnpm db:seed`.
 //
-// Demo beats have no audio or cover yet (file keys stay empty). Preview audio
-// comes in Phase 3.
+// Preview audio: a demo beat gets `previewKey = previews/<slug>.mp3` only if
+// `pnpm make-preview` has made public/previews/<slug>.mp3 (those files aren't
+// in git). Make the previews first, then run the seed (again). Demo beats
+// have no full files or cover (mp3Key, wavKey, stemsKey, coverUrl stay empty).
 
 // First, so DATABASE_URL is set before db.ts creates the client.
 import "dotenv/config";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
@@ -250,15 +254,25 @@ async function main() {
         },
       },
     });
+
+    // Only fills in a missing preview, so a re-run never overwrites one.
+    const previewKey = `previews/${beat.slug}.mp3`;
+    if (existsSync(path.join("public", previewKey))) {
+      await db.beat.updateMany({
+        where: { slug: beat.slug, previewKey: null },
+        data: { previewKey },
+      });
+    }
   }
 
-  const [tierCount, beatCount, licenseCount] = await Promise.all([
+  const [tierCount, beatCount, previewCount, licenseCount] = await Promise.all([
     db.licenseTier.count(),
     db.beat.count(),
+    db.beat.count({ where: { previewKey: { not: null } } }),
     db.beatLicense.count(),
   ]);
   console.log(
-    `Seed done: ${tierCount} license tiers, ${beatCount} beats, ${licenseCount} beat licenses, admin ready.`,
+    `Seed done: ${tierCount} license tiers, ${beatCount} beats (${previewCount} with a preview), ${licenseCount} beat licenses, admin ready.`,
   );
 }
 

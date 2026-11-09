@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "prepare": "husky",
     "postinstall": "prisma generate",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "make-preview": "tsx scripts/make-preview.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [

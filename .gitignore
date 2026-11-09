@@ -2,6 +2,11 @@
 .env*
 !.env.example
 
+# Audio: full-quality source files and the producer tag never go in git.
+# Previews are generated from them with `pnpm make-preview`.
+/audio-src/
+/public/previews/
+
 # Personal Claude Code files
 .claude/settings.local.json
 CLAUDE.local.md

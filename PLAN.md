@@ -136,6 +136,7 @@ Key rules:
 
 - Upload the full WAV, then run `scripts/make-preview.ts` (ffmpeg): 128kbps MP3, optional 60–90s cut, and a voice tag ("producer tag") mixed in every ~20s.
 - **Preview** files sit in a public bucket/path behind a CDN. **Full** MP3/WAV/stems sit in a **private** bucket.
+- Until R2 exists (Phase 5), demo previews are generated into `public/previews/<slug>.mp3` from source files in `audio-src/` (both gitignored), and Next serves them. Their keys (`previews/<slug>.mp3`) stay the same when they move to the public bucket.
 - Downloads go through `GET /api/download/[orderItemId]/[fileType]`. That route:
   1. Authorizes the request: the signed-in owner of the order, **or** a guest `?token=` whose SHA-256 hash matches `Order.downloadTokenHash` (compared in constant time) and has not expired.
   2. Checks the order is PAID (not REFUNDED).
@@ -216,7 +217,9 @@ Claude-code-project/
 │  └─ seed.ts                    # license tiers, admin, ~12 demo beats
 ├─ scripts/
 │  └─ make-preview.ts            # ffmpeg preview + tag
+├─ audio-src/                    # full-quality demo sources + tag.wav (gitignored)
 ├─ public/                       # logo, placeholder covers
+│  └─ previews/                  # generated demo previews (gitignored, until R2)
 ├─ src/
 │  ├─ app/
 │  │  ├─ (store)/layout.tsx      # header + footer (store pages only, not admin)
@@ -323,8 +326,8 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] `PlayerBar` in the root layout using a single `<audio>` element
 - [ ] `Waveform` with wavesurfer.js on the beat page, synced to the global player
 - [ ] Increment `plays` (debounced, server action) after 10s of listening
-- [ ] Install ffmpeg
-- [ ] `scripts/make-preview.ts` ffmpeg pipeline
+- [x] Install ffmpeg
+- [x] `scripts/make-preview.ts` ffmpeg pipeline
 
 ### Phase 4: Cart (days 11–12)
 
