@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 3 is built: all 6 PLAN.md §8 boxes are ticked. Task 4 (count plays) is waiting for review and commit. Tasks 1–3 are committed (`84b2647`, `d6ab260`, `3460384`). `develop` is 3 commits ahead of `origin` (not pushed). The player, waveform and play counting haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 3 is done. All 6 PLAN.md §8 boxes are ticked, and its 4 tasks are committed (`84b2647`, `d6ab260`, `3460384`, `52578f3`) and pushed to `origin/develop`. The player, waveform and play counting haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** review and commit task 4, then a browser check of Phase 3 (`/chrome` to enable Claude in Chrome, or by hand). Then Phase 4: cart (plan first).
+- **Next step:** a browser check of Phase 3 (`/chrome` to enable Claude in Chrome, or by hand). Then Phase 4: cart (plan first).
 
 ## Open questions
 
@@ -22,6 +22,10 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-09: Phase 3 committed and pushed
+
+- Task 4 committed as `52578f3`. Phase 3's 4 commits (`84b2647`, `d6ab260`, `3460384`, `52578f3`) and this progress update are pushed to `origin/develop`. "Up next" now lists the Phase 3 browser check and the Phase 4 roadmap items.
 
 ### 2026-11-09: Phase 3 task 4: count plays after 10 s
 
@@ -319,9 +323,16 @@ Decisions:
 
 - `PLAN.md`: full plan covering features, data model, flows, security checklist, roadmap and definition of done.
 
-## Up next: Phase 3 (PLAN.md §8)
+## Up next
 
-- [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (`84b2647`)
-- [x] Task 2 (`d6ab260`, browser check still to do): `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
-- [x] Task 3 (`3460384`): `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
-- [x] Task 4 (waiting for review): `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.
+- [ ] Browser check of Phase 3:
+  - Play from a card, and the bar appears.
+  - The music keeps playing across pages.
+  - Next and previous follow the grid. Seek and volume work.
+  - The waveform draws, follows the bar, and a click on it seeks or starts the beat.
+  - `plays` goes up once after 10 s of listening.
+
+Phase 4: Cart (PLAN.md §8), plan first:
+
+- [ ] Zustand `cart` store persisted to localStorage; one tier per beat
+- [ ] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals, bundle, coupon) with unit tests
