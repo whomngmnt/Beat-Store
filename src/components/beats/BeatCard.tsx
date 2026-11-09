@@ -8,13 +8,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PlayButton } from "@/components/player/PlayButton";
 import type { BeatCardData } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
+import type { Track } from "@/store/player";
 
 // Badges are plain spans styled with badgeVariants: shadcn's <Badge> calls a
 // Base UI hook, and this is a server component.
-export function BeatCard({ beat }: { beat: BeatCardData }) {
+// `queue` is the grid this card is in (see BeatGrid).
+export function BeatCard({
+  beat,
+  queue,
+}: {
+  beat: BeatCardData;
+  queue: Track[];
+}) {
   const fromPriceCents = beat.licenses[0]?.priceCents;
+  // -1 when the beat has no preview, so it gets no play button.
+  const queueIndex = queue.findIndex((track) => track.id === beat.id);
 
   return (
     <Card className="h-full pt-0">
@@ -28,6 +39,13 @@ export function BeatCard({ beat }: { beat: BeatCardData }) {
           >
             Exclusive reserved
           </span>
+        )}
+        {queueIndex !== -1 && (
+          <PlayButton
+            queue={queue}
+            index={queueIndex}
+            className="absolute right-3 bottom-3"
+          />
         )}
       </div>
 

@@ -8,11 +8,13 @@ import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
 export const CATALOG_PAGE_SIZE = 9;
 
 // What a BeatCard needs. `licenses` holds only the cheapest active license,
-// which is the card's "From" price.
+// which is the card's "From" price. `previewKey` is the public preview's
+// storage key. The keys of the full files are never loaded.
 const beatCardSelect = {
   id: true,
   slug: true,
   title: true,
+  previewKey: true,
   bpm: true,
   musicalKey: true,
   genre: true,

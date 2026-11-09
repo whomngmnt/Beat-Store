@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BeatCard } from "@/components/beats/BeatCard";
 import { BeatFilters } from "@/components/beats/BeatFilters";
+import { BeatGrid } from "@/components/beats/BeatGrid";
 import { buttonVariants } from "@/components/ui/button";
 import { getCatalogPage, getFilterOptions } from "@/lib/catalog";
 import { catalogSearchSchema, type CatalogFilters } from "@/lib/validators";
@@ -29,13 +29,7 @@ export default async function BeatsPage({ searchParams }: PageProps<"/beats">) {
       <BeatFilters filters={filters} options={options} />
 
       {beats.length > 0 ? (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {beats.map((beat) => (
-            <li key={beat.id}>
-              <BeatCard beat={beat} />
-            </li>
-          ))}
-        </ul>
+        <BeatGrid beats={beats} />
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
           {total === 0 ? (

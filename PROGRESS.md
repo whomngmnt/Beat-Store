@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 3 has started (4 tasks, see "Up next"). Task 1 (ffmpeg, `make-preview.ts`, seed previews) is done and waiting for review and commit. The local database has all 12 demo beats with placeholder previews. Phase 2 is committed and pushed (`120c68f`, `develop` matches `origin`). The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 3, task 2 of 4 (player store, `PlayerBar`, play buttons) is done and waiting for review and commit. Playback has not been tested in a real browser yet (see the log). Task 1 is committed as `84b2647`. `develop` is 1 commit ahead of `origin` (not pushed). The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** the user reviews and OKs task 1 for commit. Then task 2: player store, `PlayerBar`, play buttons (detailed file plan first).
+- **Next step:** a browser check of playback (Claude in Chrome once its tools are enabled with `/chrome`, or by hand), then review and commit task 2. Then task 3: `Waveform` (detailed file plan first).
 
 ## Open questions
 
@@ -22,6 +22,31 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-09: Phase 3 task 2: player store, `PlayerBar`, play buttons
+
+- Added `zustand` **5.0.16**, pinned with `~5.0.16` (user approved). 5.1.0 was only 3 days old, and brand-new releases are where npm supply-chain attacks usually land. 5.0.16 has the same API. The only peer warning is the known ESLint 10 one.
+- `src/store/player.ts`: the store and the `Track` type (`id`, `slug`, `title`, `previewUrl`).
+  - **State:** `audio`, `queue`, `index` (−1 means none), `isPlaying`, `currentTime`, `duration`, `volume`.
+  - **Actions:** `playQueue`, `toggle`, `next`, `prev`, `seek` and `setVolume` act on the `<audio>` element directly. `next` on the last track pauses. `prev` on the first track restarts it. An index outside the queue is ignored.
+  - **Who writes what:** `isPlaying`, `currentTime` and `duration` are written only by the element's own events. A failed `play()` (interrupted by a newer track, or a file that can't play) is swallowed, because the events already keep the state right.
+  - **On the server:** nothing writes to the store there, so every server render starts empty.
+- `src/components/player/PlayerBar.tsx` (client, in the root layout `src/app/layout.tsx`): the only `<audio>` element.
+  - **Wiring:** it's always rendered and registers itself with a ref callback defined outside the component, so React doesn't re-attach it on every render. Its events (play, pause, error, timeupdate, durationchange, ended → `next()`) write to the store. A `NaN` duration becomes 0.
+  - **The bar:** it shows once a track is loaded and is fixed to the bottom, with an 80 px spacer so it doesn't cover the footer. It has prev / play-pause / next (Next is disabled on the last track), the title linking to the beat page, a time and seek range input, and a volume range input (hidden on narrow screens). Every control is native with an `aria-label`.
+- `src/components/player/PlayButton.tsx` (client): props `queue`, `index`. It shows Pause only when its track is the one loaded and playing, and its label reads "Play Midnight Drive" or "Pause Midnight Drive". Clicking it toggles the loaded track, otherwise it calls `playQueue(queue, index)`.
+- `src/components/beats/BeatGrid.tsx` (server): builds the queue from the beats that have a `previewKey` and renders the grid. It replaces the 3 copies of the grid markup in `/beats` and on the home page (Featured, New releases). `BeatCard` takes `queue` and shows a `PlayButton` on the cover when its beat is in the queue.
+- `src/lib/storage.ts`: `previewUrl(key)` returns `PUBLIC_CDN_URL + "/" + key`, so locally it's `/previews/<slug>.mp3` from `public/`. Server only. `.env.example` has a comment on `PUBLIC_CDN_URL` (no trailing slash; empty locally).
+- `src/lib/catalog.ts`: `previewKey` added to `beatCardSelect` only. The full-file keys are still never loaded.
+- `tests/unit/player-store.test.ts`: 9 tests with a fake audio object (playQueue, a bad index, no element yet, next/prev in the middle and at both ends, toggle, seek, volume).
+- PLAN.md: §6 tree (`PlayButton`, `BeatGrid`, `previewUrl()`), §8 store and PlayerBar boxes ticked.
+- Checks:
+  - Prettier, lint, typecheck, 21 tests and build pass. The routes are unchanged (`/`, `/beats`, `/beats/[slug]` dynamic).
+  - Against `pnpm start` on port 3001: `/previews/midnight-drive.mp3` returned 200 `audio/mpeg` (1.44 MB), a range request returned 206 (seeking needs it), and a missing preview returned 404.
+  - Play buttons: 9 on `/` (3 featured + 6 newest), 9 on `/beats`, 3 on page 2, 9 with price sort. No full-file keys appeared in any HTML. The `<audio>` element is on every page, including the 404 page.
+  - React sends the shared queue once per grid in the page payload: the first card has it, and the other 8 refer to it.
+- **Not tested yet:** playback in a real browser. Claude in Chrome's tools weren't enabled for this session. To check: play from a card, the bar appears, the music keeps playing across page navigation, next/prev follow the grid, seeking and volume work, and the card's icon switches between Play and Pause.
+- Not done on purpose: the beat page's play button and waveform (task 3), play counting (task 4), an error message in the bar when a preview fails to load (Phase 9 error states), keeping the player across a page reload, keyboard shortcuts (Phase 9).
 
 ### 2026-11-09: Phase 3 plan, and task 1: ffmpeg, preview script, seed previews
 
@@ -249,7 +274,7 @@ Decisions:
 
 ## Up next: Phase 3 (PLAN.md §8)
 
-- [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (waiting for review)
-- [ ] Task 2: `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
+- [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (`84b2647`)
+- [x] Task 2 (waiting for browser check and review): `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
 - [ ] Task 3: `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
 - [ ] Task 4: `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { BeatCard } from "@/components/beats/BeatCard";
+import { BeatGrid } from "@/components/beats/BeatGrid";
 import { buttonVariants } from "@/components/ui/button";
 import {
   getFeaturedBeats,
@@ -43,13 +43,7 @@ export default async function Home() {
           {featured.length > 0 && (
             <section className="flex flex-col gap-4">
               <h2 className="text-2xl font-semibold">Featured</h2>
-              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {featured.map((beat) => (
-                  <li key={beat.id}>
-                    <BeatCard beat={beat} />
-                  </li>
-                ))}
-              </ul>
+              <BeatGrid beats={featured} />
             </section>
           )}
 
@@ -64,13 +58,7 @@ export default async function Home() {
                 View all
               </Link>
             </div>
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {newest.map((beat) => (
-                <li key={beat.id}>
-                  <BeatCard beat={beat} />
-                </li>
-              ))}
-            </ul>
+            <BeatGrid beats={newest} />
           </section>
 
           <section className="flex flex-col gap-4">

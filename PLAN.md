@@ -241,15 +241,15 @@ Claude-code-project/
 │  │  └─ layout.tsx              # root: <html class="dark">, fonts; includes <PlayerBar/>
 │  ├─ components/
 │  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
-│  │  ├─ player/PlayerBar.tsx, Waveform.tsx
-│  │  ├─ beats/BeatCard.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
+│  │  ├─ player/PlayerBar.tsx, PlayButton.tsx, Waveform.tsx
+│  │  ├─ beats/BeatCard.tsx, BeatGrid.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
 │  │  ├─ cart/CartDrawer.tsx
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
 │  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination
 │  │  ├─ stripe.ts
-│  │  ├─ storage.ts              # S3/R2 client, signUrl(), presignUpload()
+│  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signUrl(), presignUpload()
 │  │  ├─ auth.ts
 │  │  ├─ auth-guards.ts          # requireUser(), requireAdmin(): called in every protected page/route/action
 │  │  ├─ fulfilment.ts           # idempotent fulfilOrder() + post-commit side effects
@@ -322,8 +322,8 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 3: Audio player (days 8–10)
 
-- [ ] Zustand `player` store (current track, queue, isPlaying, progress)
-- [ ] `PlayerBar` in the root layout using a single `<audio>` element
+- [x] Zustand `player` store (current track, queue, isPlaying, progress)
+- [x] `PlayerBar` in the root layout using a single `<audio>` element
 - [ ] `Waveform` with wavesurfer.js on the beat page, synced to the global player
 - [ ] Increment `plays` (debounced, server action) after 10s of listening
 - [x] Install ffmpeg
