@@ -260,7 +260,7 @@ Claude-code-project/
 │  │  ├─ license-pdf.tsx         # later slice (PDF)
 │  │  ├─ pricing.ts              # cart total, coupon, bundle logic (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
-│  ├─ actions/                   # server actions: checkout.ts, beats.ts, orders.ts
+│  ├─ actions/                   # server actions: checkout.ts, beats.ts, orders.ts, plays.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
@@ -325,7 +325,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [x] Zustand `player` store (current track, queue, isPlaying, progress)
 - [x] `PlayerBar` in the root layout using a single `<audio>` element
 - [x] `Waveform` with wavesurfer.js on the beat page, synced to the global player
-- [ ] Increment `plays` (debounced, server action) after 10s of listening
+- [x] Increment `plays` (debounced, server action) after 10s of listening
 - [x] Install ffmpeg
 - [x] `scripts/make-preview.ts` ffmpeg pipeline
 

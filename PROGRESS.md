@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 3, task 3 of 4 (`Waveform`) is done and waiting for review and commit. The user asked for it to be built without a plan first. Tasks 1 and 2 are committed (`84b2647`, `d6ab260`). `develop` is 2 commits ahead of `origin` (not pushed). Playback and the waveform haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 3 is built: all 6 PLAN.md §8 boxes are ticked. Task 4 (count plays) is waiting for review and commit. Tasks 1–3 are committed (`84b2647`, `d6ab260`, `3460384`). `develop` is 3 commits ahead of `origin` (not pushed). The player, waveform and play counting haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** review and commit task 3, a browser check of tasks 2 and 3 (`/chrome` to enable Claude in Chrome, or by hand), then task 4: count plays.
+- **Next step:** review and commit task 4, then a browser check of Phase 3 (`/chrome` to enable Claude in Chrome, or by hand). Then Phase 4: cart (plan first).
 
 ## Open questions
 
@@ -22,6 +22,28 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-09: Phase 3 task 4: count plays after 10 s
+
+Built straight away at the user's request ("do it"). It follows the Phase 3 plan for task 4.
+
+- `src/actions/plays.ts`: the `recordPlay(beatId: unknown)` server action.
+  - **No auth guard on purpose:** visitors listen without signing in. The comment says so, because CLAUDE.md asks for guards on protected actions.
+  - **Input:** `beatIdSchema` checks the id first, and anything else returns without touching the database.
+  - **The update:** one `updateMany` with `plays: { increment: 1 }` (a single `plays = plays + 1` in SQL), only for PUBLISHED or RESERVED beats. Two plays at the same moment can't overwrite each other, and an unknown id doesn't throw.
+- `src/lib/validators.ts`: `beatIdSchema = z.uuid()`. Tests: a UUID passes. An empty string, a slug, a UUID one character short, a UUID with SQL appended, a number and `null` fail.
+- `src/store/player.ts`: `listenedSeconds` and `timeUpdate(time)`, which replaces the plain `currentTime` write in `PlayerBar`.
+  - **Counting:** only forward steps under 1 s are added (the element reports every ~0.25 s while playing), so seeking forward or back doesn't count as listening.
+  - **Once per track:** it returns `true` once per loaded track, at the moment the total passes `COUNT_PLAY_AFTER_SECONDS` (10). `load` resets the count, so next/prev and a new `playQueue` start again from 0. Replaying the same loaded track after it ends isn't counted twice.
+- `PlayerBar`: `onTimeUpdate` calls `timeUpdate` and, when it returns `true`, `recordPlay(track.id)`. A failed call is caught and dropped, so it never interrupts the music.
+- Tests: 4 store tests (counts once after 10 s; a seek isn't listening; the count restarts for the next track; counts from a part-way start) and 7 validator cases. 33 tests in total.
+- PLAN.md: `plays.ts` in the §6 `actions/` line, §8 plays box ticked. That completes Phase 3's roadmap boxes.
+- Checks:
+  - Prettier, lint, typecheck, 33 tests and build pass.
+  - Calling `recordPlay` directly against the local database (throwaway script in the scratchpad, every row restored): PUBLISHED +1, RESERVED +1, SOLD +0, DRAFT +0. 20 calls at once added exactly 20. 6 bad or unknown ids changed nothing and threw nothing.
+  - Over HTTP against `pnpm start` (POST with the action's `Next-Action` id, as the browser sends it): a real id from the same origin gave +1. A junk id gave no change. An `Origin` from another site was refused by Next (HTTP 500), with no change. The action's code isn't in any browser chunk, only its id. `plays` restored.
+- **Known limit, as planned:** anyone on the same site (or a script that sets the headers) can call the action repeatedly to push a beat up the "Popular" sort. The rate-limiting later slice (Upstash) covers that.
+- **Not tested yet:** in a real browser, check that a play is recorded after 10 s of listening, and only once per track.
 
 ### 2026-11-09: Phase 3 task 3: `Waveform` on the beat page
 
@@ -301,5 +323,5 @@ Decisions:
 
 - [x] Task 1: ffmpeg, `scripts/make-preview.ts`, seed sets `previewKey` (`84b2647`)
 - [x] Task 2 (`d6ab260`, browser check still to do): `zustand` store `src/store/player.ts` (the `<audio>` element is the source of truth, the store mirrors it), `PlayerBar` in the root layout, `PlayButton`, `BeatGrid` (builds the queue, replaces the 3 copies of the grid markup), `src/lib/storage.ts` `previewUrl()`, `previewKey` in the catalog selects, store unit tests
-- [x] Task 3 (waiting for review): `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
-- [ ] Task 4: `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.
+- [x] Task 3 (`3460384`): `wavesurfer.js` 8 `Waveform` on the beat page. It only draws and follows the store, and never plays or touches the global `<audio>` (attaching it would switch that element's `src`). No player on SOLD beats.
+- [x] Task 4 (waiting for review): `src/actions/plays.ts` `recordPlay` (Zod id, atomic increment, PUBLISHED/RESERVED only) after 10 s of real listening, counted in the store. Known limitation: anyone can call it repeatedly until the rate-limiting slice.

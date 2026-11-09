@@ -47,3 +47,6 @@ export const beatSlugSchema = z
   .string()
   .max(100)
   .regex(/^[a-z0-9-]+$/);
+
+// A beat id sent by the browser. Every id is a UUID (PLAN.md §4).
+export const beatIdSchema = z.uuid();

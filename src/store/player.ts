@@ -3,12 +3,15 @@
 // The app's one <audio> element lives in PlayerBar and registers itself
 // here as `audio`. The actions below act on that element directly.
 // `isPlaying`, `currentTime` and `duration` are written only by the
-// element's own events (see PlayerBar), so the UI always shows what the
-// element is really doing, even when a file fails to load.
+// element's own events (see PlayerBar and timeUpdate), so the UI always
+// shows what the element is really doing, even when a file fails to load.
 //
 // Only client components change this store. The server never writes to it,
 // so every server render starts from the empty state below.
 import { create } from "zustand";
+
+// A play is counted after this much real listening to one track.
+export const COUNT_PLAY_AFTER_SECONDS = 10;
 
 export type Track = {
   id: string;
@@ -25,6 +28,8 @@ type PlayerState = {
   currentTime: number; // seconds
   duration: number; // seconds, 0 until the file's length is known
   volume: number; // 0 to 1
+  listenedSeconds: number; // real listening to the current track so far
+  timeUpdate: (time: number) => boolean;
   playQueue: (queue: Track[], index: number, startAt?: number) => void;
   toggle: () => void;
   next: () => void;
@@ -39,7 +44,13 @@ export const usePlayerStore = create<PlayerState>()((set, get) => {
   function load(queue: Track[], index: number, startAt = 0) {
     const track = queue[index];
     if (!track) return;
-    set({ queue, index, currentTime: startAt, duration: 0 });
+    set({
+      queue,
+      index,
+      currentTime: startAt,
+      duration: 0,
+      listenedSeconds: 0,
+    });
 
     const { audio } = get();
     if (!audio) return;
@@ -59,6 +70,23 @@ export const usePlayerStore = create<PlayerState>()((set, get) => {
     currentTime: 0,
     duration: 0,
     volume: 1,
+    listenedSeconds: 0,
+
+    // Called by the element's timeupdate event (about every 0.25 s while
+    // playing). Adds up real listening: only small forward steps count, so
+    // a seek doesn't. Returns true once per loaded track, at the moment it
+    // passes COUNT_PLAY_AFTER_SECONDS, which is when PlayerBar records a play.
+    timeUpdate: (time) => {
+      const { currentTime, listenedSeconds } = get();
+      const step = time - currentTime;
+      const listened =
+        step > 0 && step < 1 ? listenedSeconds + step : listenedSeconds;
+      set({ currentTime: time, listenedSeconds: listened });
+      return (
+        listenedSeconds < COUNT_PLAY_AFTER_SECONDS &&
+        listened >= COUNT_PLAY_AFTER_SECONDS
+      );
+    },
 
     playQueue: load,
 

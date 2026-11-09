@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { beatSlugSchema, catalogSearchSchema } from "../../src/lib/validators";
+import {
+  beatIdSchema,
+  beatSlugSchema,
+  catalogSearchSchema,
+} from "../../src/lib/validators";
 
 describe("catalogSearchSchema", () => {
   it("uses the defaults when the URL has no params", () => {
@@ -82,5 +86,24 @@ describe("beatSlugSchema", () => {
     "a".repeat(101),
   ])("rejects %j", (slug) => {
     expect(beatSlugSchema.safeParse(slug).success).toBe(false);
+  });
+});
+
+describe("beatIdSchema", () => {
+  it("accepts a UUID", () => {
+    expect(
+      beatIdSchema.safeParse("88171aa8-3ae3-498f-9f79-50ce2e3daa4e").success,
+    ).toBe(true);
+  });
+
+  it.each([
+    "",
+    "midnight-drive",
+    "88171aa8-3ae3-498f-9f79-50ce2e3daa4",
+    "88171aa8-3ae3-498f-9f79-50ce2e3daa4e' OR 1=1",
+    42,
+    null,
+  ])("rejects %j", (id) => {
+    expect(beatIdSchema.safeParse(id).success).toBe(false);
   });
 });

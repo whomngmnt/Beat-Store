@@ -5,6 +5,7 @@
 // the user moves between pages.
 import Link from "next/link";
 import { Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { recordPlay } from "@/actions/plays";
 import { Button } from "@/components/ui/button";
 import { usePlayerStore } from "@/store/player";
 
@@ -33,7 +34,8 @@ export function PlayerBar() {
   const duration = usePlayerStore((state) => state.duration);
   const volume = usePlayerStore((state) => state.volume);
   // Actions never change, so reading them once is enough.
-  const { toggle, next, prev, seek, setVolume } = usePlayerStore.getState();
+  const { toggle, next, prev, seek, setVolume, timeUpdate } =
+    usePlayerStore.getState();
 
   return (
     <>
@@ -44,9 +46,12 @@ export function PlayerBar() {
         onPlay={() => setPlayerState({ isPlaying: true })}
         onPause={() => setPlayerState({ isPlaying: false })}
         onError={() => setPlayerState({ isPlaying: false })}
-        onTimeUpdate={(event) =>
-          setPlayerState({ currentTime: event.currentTarget.currentTime })
-        }
+        // Also counts a play after 10 s of listening. A failed count is
+        // dropped: it isn't worth interrupting the music for.
+        onTimeUpdate={(event) => {
+          const countPlay = timeUpdate(event.currentTarget.currentTime);
+          if (countPlay && track) recordPlay(track.id).catch(() => {});
+        }}
         // NaN until the file's length is known.
         onDurationChange={(event) => {
           const { duration } = event.currentTarget;
