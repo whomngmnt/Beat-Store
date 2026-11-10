@@ -248,7 +248,7 @@ Claude-code-project/
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
-│  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination
+│  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination; cart lines
 │  │  ├─ stripe.ts
 │  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signUrl(), presignUpload()
 │  │  ├─ auth.ts
@@ -261,7 +261,7 @@ Claude-code-project/
 │  │  ├─ license-pdf.tsx         # later slice (PDF)
 │  │  ├─ pricing.ts              # price display, cart total; coupon maths in Phase 8 (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
-│  ├─ actions/                   # server actions: checkout.ts, beats.ts, orders.ts, plays.ts
+│  ├─ actions/                   # server actions: cart.ts, checkout.ts, beats.ts, orders.ts, plays.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/

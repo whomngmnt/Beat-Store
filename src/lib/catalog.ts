@@ -1,9 +1,17 @@
-// Catalog queries for /beats and /beats/[slug]. Filters come in already
-// checked by catalogSearchSchema (src/lib/validators.ts).
+// Catalog queries for /beats, /beats/[slug] and the cart. Input comes in
+// already checked by the Zod schemas in src/lib/validators.ts.
 import { cache } from "react";
-import type { Prisma } from "@/generated/prisma/client";
+import type {
+  BeatStatus,
+  LicenseCode,
+  Prisma,
+} from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
+import {
+  beatSlugSchema,
+  type CartItem,
+  type CatalogFilters,
+} from "@/lib/validators";
 
 export const CATALOG_PAGE_SIZE = 9;
 
@@ -208,3 +216,87 @@ export const getBeatBySlug = cache(async (rawSlug: string) => {
     select: beatDetailSelect,
   });
 });
+
+// One line of the cart, read from the database. `priceCents` and `problem`
+// tell the buyer whether the line can be bought right now.
+export type CartLine = {
+  beatId: string;
+  licenseTierId: string;
+  // null only when the beat or the tier no longer exists
+  slug: string | null;
+  title: string | null;
+  tierName: string | null;
+  // The price from the database, or null when the line can't be bought.
+  priceCents: number | null;
+  // Why the line can't be bought, shown to the buyer. null when it can.
+  problem: string | null;
+};
+
+// Every cart item gets one line, in cart order. Nothing comes from the
+// browser except the two ids: title, tier and price are all read here.
+// Like the beat page's query, it never loads the keys of the full files.
+export async function getCartLines(items: CartItem[]): Promise<CartLine[]> {
+  if (items.length === 0) return [];
+
+  const rows = await db.beatLicense.findMany({
+    where: {
+      OR: items.map(({ beatId, licenseTierId }) => ({
+        beatId,
+        licenseTierId,
+      })),
+    },
+    select: {
+      beatId: true,
+      licenseTierId: true,
+      priceCents: true,
+      active: true,
+      beat: { select: { slug: true, title: true, status: true } },
+      licenseTier: { select: { name: true, code: true } },
+    },
+  });
+
+  return items.map((item) => {
+    const row = rows.find(
+      (row) =>
+        row.beatId === item.beatId && row.licenseTierId === item.licenseTierId,
+    );
+    if (!row) {
+      return {
+        ...item,
+        slug: null,
+        title: null,
+        tierName: null,
+        priceCents: null,
+        problem: "No longer available",
+      };
+    }
+
+    const problem = cartLineProblem(row);
+    return {
+      ...item,
+      slug: row.beat.slug,
+      title: row.beat.title,
+      tierName: row.licenseTier.name,
+      priceCents: problem === null ? row.priceCents : null,
+      problem,
+    };
+  });
+}
+
+// The catalog's rule (catalogWhere), checked for one license: the beat is
+// PUBLISHED or RESERVED and this license is on sale. Checked line by line
+// here, so the cart can say why a line can't be bought. While a checkout
+// holds a beat, only its exclusive is blocked (.claude/rules/exclusives.md).
+function cartLineProblem(row: {
+  active: boolean;
+  beat: { status: BeatStatus };
+  licenseTier: { code: LicenseCode };
+}): string | null {
+  const { status } = row.beat;
+  if (status === "SOLD") return "Sold";
+  if (status === "DRAFT" || !row.active) return "No longer available";
+  if (status === "RESERVED" && row.licenseTier.code === "EXCLUSIVE") {
+    return "Reserved, check back soon";
+  }
+  return null;
+}

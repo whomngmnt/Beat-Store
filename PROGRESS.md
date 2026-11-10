@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 4 (cart) is in progress. Its plan is approved (3 tasks, see the log). Task 1, the cart store, is done and waiting for the user's review. It isn't committed yet. Phase 3 is committed and pushed, but the player, waveform and play counting still haven't been tested in a real browser. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 4 (cart) is in progress. Its plan is approved (3 tasks, see the log). Task 1, the cart store, is committed as `48b6576` and pushed to `origin/develop`. Task 2, the server lookup and cart total, is done and waiting for the user's review. It isn't committed yet. Phase 3 is committed and pushed, but the player, waveform and play counting still haven't been tested in a real browser. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** the user reviews task 1 and says whether to commit. Then task 2: the server lookup (`getCartLines`, `getCart` action) and `cartTotalCents` in `pricing.ts`. The Phase 3 browser check is planned for task 3, together with the cart UI.
+- **Next step:** the user reviews task 2 and says whether to commit. Then task 3: the cart UI ("Add to cart", `CartButton`, `CartContents`, `CartDrawer`, `/cart` page), with the Phase 3 browser check done at the same time.
 
 ## Open questions
 
@@ -23,7 +23,39 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-10: Phase 4 plan, and task 1: cart store
+### 2026-11-10: Phase 4 task 2: server lookup and cart total
+
+It follows the approved Phase 4 plan for task 2.
+
+- `src/lib/pricing.ts`: `cartTotalCents(prices)` adds up whole cents. It throws on anything that isn't a whole, non-negative, safe integer (`29.99`, `-1`, `NaN`, `Infinity`), so a bug can't show or charge a wrong total. The header comment no longer promises a bundle or a coupon here. The coupon comes in Phase 8.
+- `src/lib/catalog.ts`: `getCartLines(items)` and the `CartLine` type.
+  - **The query:** one `findMany` on `BeatLicense` matches each (beatId, licenseTierId) pair. It selects only price, `active`, the beat's slug, title and status, and the tier's name and code, never the file keys.
+  - **The result:** one line per cart item, in cart order. Each line has `priceCents` and `problem`. A line that can be bought has a price and `problem: null`. A line that can't has `priceCents: null` and a reason the cart can show.
+  - **The reasons:** "Sold" (SOLD beat), "No longer available" (DRAFT beat, license switched off, or a beat/tier pair that doesn't exist, which gives no title either), and "Reserved, check back soon" (the exclusive of a RESERVED beat; its leases are still buyable, per `.claude/rules/exclusives.md`).
+  - **Differs from the plan's wording:** the plan said it would reuse `catalogWhere`. Instead, `cartLineProblem()` checks the same rule (PUBLISHED or RESERVED, and this license active) one line at a time, so the cart can say why a line can't be bought. A comment points to `catalogWhere`. The statuses are typed with Prisma's `BeatStatus` / `LicenseCode`, so a misspelt status fails typecheck.
+- `src/actions/cart.ts`: the `getCart(items: unknown)` server action.
+  - **Input:** `cartItemsSchema` checks the cart, and a bad one returns `null` without querying.
+  - **Output:** `{ lines, totalCents }`, where the total counts only lines that can be bought.
+  - **No auth guard on purpose:** guests fill a cart, and the comment says so, as in `recordPlay`. It only reads. Checkout (Phase 5) reads the prices again.
+- Tests: `tests/unit/pricing.test.ts` has 6 new cases (empty cart, sums, 4 bad prices), 59 tests in total. `getCartLines` and `getCart` are database code with no pure logic worth splitting out, so they were checked against the real database instead (below).
+- Checks:
+  - Prettier, lint, typecheck, 59 tests and build pass.
+  - Docker Desktop wasn't running. It was started from `%LOCALAPPDATA%\Programs\DockerDesktop` (not `Program Files`), then `docker compose up -d`.
+  - A throwaway script in the scratchpad called `getCart` against local Docker, with every row restored afterwards. Before and after: 12 PUBLISHED, 48 active licenses, 0 prices off their default. Results:
+    - 4 available lines gave the database prices and their sum.
+    - Each line has exactly the 7 `CartLine` fields, so no storage key.
+    - A reversed cart came back reversed.
+    - A SOLD beat, a raised price, the exclusive of a RESERVED beat and a switched-off license gave "Sold", the new price, "Reserved, check back soon" and "No longer available". Only the new price counted in the total.
+    - A lease on the RESERVED beat stayed buyable.
+    - A DRAFT beat and unknown ids gave "No longer available".
+    - 7 bad inputs (a string, `null`, `undefined`, one item, 21 items, the same beat twice, SQL in an id) gave `null`.
+    - A `priceCents` sent along was ignored.
+    - An empty cart gave no lines and a total of 0.
+  - The script's first version wrongly failed its "no file keys" check: the pattern matched the word "Stems" in the tier name "Trackout / Stems". It now checks the field names instead.
+- PLAN.md §6: `cart.ts` in the `actions/` line, and "cart lines" on `catalog.ts`. No §8 box: the second Phase 4 box is ticked after task 3.
+- Not tested yet: calling the action over HTTP from a browser. No client code imports it until task 3.
+
+### 2026-11-10: Phase 4 plan, and task 1: cart store (commit `48b6576`)
 
 Phase 4 plan (user approved): 3 tasks, each reviewed and committed on its own. (1) cart store, (2) server lookup and cart total, (3) cart UI: "Add to cart", header cart button, drawer and `/cart` page. User decisions:
 
