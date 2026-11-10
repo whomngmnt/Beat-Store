@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { MAX_CART_ITEMS } from "../../src/lib/cart";
 import {
-  MAX_CART_ITEMS,
   beatIdSchema,
   beatSlugSchema,
   cartItemsSchema,

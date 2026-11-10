@@ -6,12 +6,9 @@ import type {
   LicenseCode,
   Prisma,
 } from "@/generated/prisma/client";
+import type { CartItem } from "@/lib/cart";
 import { db } from "@/lib/db";
-import {
-  beatSlugSchema,
-  type CartItem,
-  type CatalogFilters,
-} from "@/lib/validators";
+import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
 
 export const CATALOG_PAGE_SIZE = 9;
 

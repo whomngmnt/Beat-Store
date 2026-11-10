@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_CART_ITEMS } from "../../src/lib/validators";
+import { MAX_CART_ITEMS } from "../../src/lib/cart";
 import { useCartStore } from "../../src/store/cart";
 
 // zustand's persist looks for `window.localStorage` when the store is
@@ -93,10 +93,18 @@ describe("cart store", () => {
     });
   });
 
-  it("loads a saved cart", async () => {
+  it("loads a saved cart, and is then marked hydrated", async () => {
     save({ items: [{ beatId: beatA, licenseTierId: basic }] });
+    expect(cart().hydrated).toBe(false);
     await useCartStore.persist.rehydrate();
     expect(cart().items).toEqual([{ beatId: beatA, licenseTierId: basic }]);
+    expect(cart().hydrated).toBe(true);
+  });
+
+  it("is marked hydrated even when the saved cart can't be read", async () => {
+    saved.set(KEY, "{");
+    await useCartStore.persist.rehydrate();
+    expect(cart().hydrated).toBe(true);
   });
 
   it("drops a price someone added to the saved cart", async () => {

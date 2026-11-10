@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { AudioLines, ShoppingCart, User } from "lucide-react";
+import { AudioLines, User } from "lucide-react";
+import { CartButton } from "@/components/cart/CartButton";
+import { CartDrawer } from "@/components/cart/CartDrawer";
 import { buttonVariants } from "@/components/ui/button";
 
 export function SiteHeader() {
@@ -24,13 +26,8 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          <Link
-            href="/cart"
-            aria-label="Cart"
-            className={buttonVariants({ variant: "ghost", size: "icon" })}
-          >
-            <ShoppingCart aria-hidden />
-          </Link>
+          <CartButton />
+          <CartDrawer />
           <Link
             href="/account"
             aria-label="Account"

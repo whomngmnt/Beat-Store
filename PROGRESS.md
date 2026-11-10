@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 4 (cart) is in progress. Its plan is approved (3 tasks, see the log). Task 1, the cart store, is committed as `48b6576` and pushed to `origin/develop`. Task 2, the server lookup and cart total, is done and waiting for the user's review. It isn't committed yet. Phase 3 is committed and pushed, but the player, waveform and play counting still haven't been tested in a real browser. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 4 (cart) code is complete. Both PLAN.md §8 Phase 4 boxes are ticked. Tasks 1 and 2 are committed (`48b6576`, `cd87683`) and pushed. Task 3, the cart UI, is reviewed and approved by the user, with Zod replaced in the browser. Neither the cart UI nor Phase 3's player has been tested in a real browser: the Claude in Chrome extension wasn't connected. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** the user reviews task 2 and says whether to commit. Then task 3: the cart UI ("Add to cart", `CartButton`, `CartContents`, `CartDrawer`, `/cart` page), with the Phase 3 browser check done at the same time.
+- **Next step:** a browser check of Phases 3 and 4: the checklist is in the task 3 log entry. Run it by hand, or connect Claude in Chrome first. After that, Phase 5: Stripe checkout (plan first).
 
 ## Open questions
 
@@ -23,7 +23,71 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-10: Phase 4 task 2: server lookup and cart total
+### 2026-11-10: Phase 4 task 3: cart UI
+
+It follows the approved Phase 4 plan for task 3.
+
+- `src/components/ui/sheet.tsx`: shadcn's `Sheet`, built on Base UI's `Dialog` (already installed).
+  - **Written by hand:** copied exactly from `pnpm shadcn add sheet --dry-run --view` and formatted with Prettier. Running the CLI would also have overwritten `button.tsx` (formatting-only changes, per `--diff`) and re-added the `cn` package, which is already installed. Like the other shadcn components here, it imports `cn` from the `cn` package.
+  - No new package.
+- `src/store/cart.ts`: a `hydrated` flag and a `setHydrated` action, set by `onRehydrateStorage` (the pattern from zustand's docs).
+  - **Why:** without it, `/cart` would show "Your cart is empty" until the saved cart was read.
+  - **Bad JSON:** the callback runs even when the saved cart is bad JSON, so the cart never stays on "Loading" forever.
+  - **Not saved:** `partialize` still saves only `items`.
+  - **Comment added:** on the server there's no `window`, so `useCartStore.persist` doesn't exist there. It's used only in effects and event handlers.
+- `src/components/cart/CartButton.tsx`: the header cart icon. It shows the count (hidden at 0, and the `aria-label` says "Cart, 2 in cart") and opens the drawer. Its effect calls `useCartStore.persist.rehydrate()` once per full page load. It replaces the `/cart` link in `SiteHeader`.
+- `src/components/cart/CartDrawer.tsx`: a `Sheet` from the right, controlled by `isOpen` in the store. It holds `CartContents` and a "View cart" link. The close button, Escape and a click outside close it (Base UI).
+- `src/components/cart/CartContents.tsx`: used in the drawer and on `/cart`.
+  - **Data:** calls `getCart(items)` whenever the items change. An answer for an old cart is dropped (`current` flag), and a rejected call shows like a bad cart.
+  - **States:**
+    - "Loading your cart…" until the store has read the saved cart, and again until the first answer arrives.
+    - An empty cart shows "Browse beats".
+    - A failed call shows "Couldn't load your cart".
+    - Otherwise each line shows a title link, tier, price or reason in red, and a Remove button with an `aria-label`, followed by the total.
+  - **After a change:** the old answer stays on screen dimmed (`aria-busy`) until the new one arrives, instead of flashing "Loading".
+  - **Links** close the drawer when clicked.
+- `src/app/(store)/cart/page.tsx`: the title "Cart" and `CartContents`. It's static (`○` in the build), because the cart lives in the browser. No Checkout button until Phase 5.
+- `LicenseSelector`:
+  - **New prop:** `beatId`, passed from the beat page.
+  - **The button** says "Add to cart", "In cart" (same tier) or "Change license in cart" (another tier of this beat). Clicking it adds or swaps the tier and opens the drawer. It's disabled when no tier can be picked.
+  - **Full cart:** `role="alert"` says the cart holds up to 20 beats.
+- Tests: the store tests check `hydrated` after a normal load and after bad JSON. 60 tests in total. The components have no unit tests: there's no DOM test setup (jsdom or happy-dom would be a new dependency), and E2E is the Playwright later slice.
+- Checks:
+  - Prettier, lint, typecheck, 60 tests and build pass. `/cart` builds as static.
+  - Against `pnpm start` on port 3001:
+    - `/cart` returned 200 with the title "Cart · Beat Store", "Loading your cart…" (the server can't see the saved cart) and the header Cart button.
+    - The `cold-concrete` beat page had "Add to cart".
+  - `getCart` over HTTP, as the browser calls it (POST with its `Next-Action` id from the build manifest):
+    - A real cart with `priceCents: 1` sent along came back with the database price, 2999.
+    - A bad cart gave `null`.
+    - An `Origin` from another site was refused (HTTP 500 with an error digest, as with `recordPlay`).
+  - No server code (`getCartLines`, `cartLineProblem`, `findMany`, `DATABASE_URL`) is in any browser chunk, only the action's id.
+  - After the server was stopped, a `node` process was still listening on port 3001, as in an earlier session. It was stopped by PID.
+- **Zod in the browser, then replaced (user decision).** With Zod, the store's chunk was 31.8 KB gzipped (110 KB raw) and loaded on every store page, because the store checked the saved cart with `cartItemsSchema`. The user chose a hand-written check in the browser, keeping Zod on the server only:
+  - **`src/lib/cart.ts` (new):** `MAX_CART_ITEMS`, the `CartItem` type and `parseSavedCart(value)`. Both moved out of `validators.ts`, because any value import from `validators.ts` in browser code pulls in Zod.
+  - **The check:** `parseSavedCart` returns the items with only their two ids, or `null` for a broken cart (not a list, more than 20 items, a non-object entry, a bad id, the same beat twice).
+  - **Its UUID pattern** is Zod's `z.uuid()` pattern, without Zod's all-zeros and all-`f`s special cases. So anything the browser accepts, the server's `cartItemsSchema` accepts too. Otherwise a hand-edited cart could pass in the browser, fail on the server, and leave the cart page stuck on "Couldn't load your cart".
+  - **Updated:** `validators.ts` imports the limit from `cart.ts` for `cartItemsSchema`. The store's `merge`, `catalog.ts`, `LicenseSelector` and `CartContents` import from `cart.ts`.
+  - **Tests:** `tests/unit/cart.test.ts` (31) covers 4 good carts, 11 broken ones, a price being dropped, and for all 15 carts, that the server accepts whatever the browser accepts. The existing store tests for broken saved carts still pass. 91 tests in total.
+  - **After:** lint, typecheck and build pass. No browser chunk contains `ZodError`. The store's chunk is now 7.6 KB (3.3 KB gzipped), and all browser JavaScript went from 875 KB to 768 KB raw. Not re-run over HTTP: the server action didn't change.
+- **Not tested in a real browser yet.** Claude in Chrome wasn't connected ("Browser extension is not connected"). Checklist:
+  - **Phase 4 cart:**
+    - "Add to cart" opens the drawer with the line and its total.
+    - The header count goes up.
+    - Picking another tier of the same beat changes the button to "Change license in cart", and clicking it swaps the line.
+    - Remove works, and the line dims briefly.
+    - A reload keeps the cart, and `/cart` shows "Loading" briefly, not "empty".
+    - "View cart" and the title links close the drawer.
+    - Escape and a click outside close it.
+    - No hydration warning in the console.
+  - **Phase 3 player:**
+    - Play from a card and from the beat page.
+    - The bar keeps playing across pages.
+    - The waveform follows the bar and seeks on click.
+    - A play is counted after 10 s, once per track.
+- PLAN.md: §6 lists `CartButton.tsx`, `CartDrawer.tsx`, `CartContents.tsx` and `lib/cart.ts`. The second §8 Phase 4 box is ticked, so both Phase 4 boxes are done.
+
+### 2026-11-10: Phase 4 task 2: server lookup and cart total (commit `cd87683`)
 
 It follows the approved Phase 4 plan for task 2.
 

@@ -1,5 +1,6 @@
 // Zod schemas for every input the server receives (PLAN.md §6).
 import { z } from "zod";
+import { MAX_CART_ITEMS } from "@/lib/cart";
 
 // Optional text filter such as a genre. An empty value, a value that's too
 // long or a repeated param (`?genre=a&genre=b` arrives as an array) all fail
@@ -51,12 +52,11 @@ export const beatSlugSchema = z
 // A beat id sent by the browser. Every id is a UUID (PLAN.md §4).
 export const beatIdSchema = z.uuid();
 
-export const MAX_CART_ITEMS = 20;
-
 // The cart: which beat and which license tier, nothing else. There's no
 // price in it, because prices always come from the database. `z.object`
 // drops any other field, such as a price someone added by hand. One tier
-// per beat, so a beat can't appear twice.
+// per beat, so a beat can't appear twice. The browser checks a saved cart
+// with parseSavedCart (src/lib/cart.ts), which follows the same rules.
 export const cartItemsSchema = z
   .array(z.object({ beatId: beatIdSchema, licenseTierId: z.uuid() }))
   .max(MAX_CART_ITEMS)
@@ -64,5 +64,3 @@ export const cartItemsSchema = z
     (items) => new Set(items.map((item) => item.beatId)).size === items.length,
     "A beat can be in the cart only once",
   );
-
-export type CartItem = z.infer<typeof cartItemsSchema>[number];

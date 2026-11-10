@@ -114,6 +114,7 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
             </p>
           ) : (
             <LicenseSelector
+              beatId={beat.id}
               licenses={beat.licenses}
               exclusiveReserved={beat.status === "RESERVED"}
             />

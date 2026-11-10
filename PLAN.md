@@ -244,10 +244,11 @@ Claude-code-project/
 │  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
 │  │  ├─ player/PlayerBar.tsx, PlayButton.tsx, Waveform.tsx
 │  │  ├─ beats/BeatCard.tsx, BeatGrid.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
-│  │  ├─ cart/CartDrawer.tsx
+│  │  ├─ cart/CartButton.tsx, CartDrawer.tsx, CartContents.tsx
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
+│  │  ├─ cart.ts                 # cart limit and type, browser check of the saved cart (no Zod)
 │  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination; cart lines
 │  │  ├─ stripe.ts
 │  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signUrl(), presignUpload()
@@ -333,7 +334,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ### Phase 4: Cart (days 11–12)
 
 - [x] Zustand `cart` store persisted to localStorage; one tier per beat
-- [ ] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals) with unit tests
+- [x] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals) with unit tests
 
 ### Phase 5: Stripe checkout (days 13–16)
 
