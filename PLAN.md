@@ -54,7 +54,7 @@ The project covers the full stack: **frontend, backend, database, file storage a
 2. **Catalog `/beats`**: grid/list view, search by title/tag, filters (genre, mood, BPM range, key, price), sort (newest, popular, price), pagination
 3. **Beat page `/beats/[slug]`**: cover art, waveform player, BPM/key/tags, license tier selector with a "what's included" comparison table, "Add to cart", similar beats
 4. **Global player bar**: play/pause, seek, next/prev, volume. It stays across page navigation and has a queue built from the current list.
-5. **Cart**: drawer plus `/cart` page, one license per beat line, totals, simple bundle deal (e.g. "Buy 2 get 1 free" on leases, optional)
+5. **Cart**: drawer plus `/cart` page, one license per beat line, totals. The cart in localStorage holds only beat and tier ids, never a price: prices and totals always come from the server.
 6. **Checkout**: redirect to Stripe Checkout (test mode), then a `/checkout/success` page
 7. **Account `/account`**: order history and re-download links (guest checkout supported; orders are matched by email)
 8. **Static pages**: Licensing info, FAQ, Contact, Terms, Privacy
@@ -211,6 +211,7 @@ Claude-code-project/
 ├─ README.md
 ├─ .env.example
 ├─ docker-compose.yml            # local Postgres
+├─ vitest.config.mts             # reads the @/ import alias from tsconfig.json
 ├─ prisma/
 │  ├─ schema.prisma
 │  ├─ migrations/
@@ -258,7 +259,7 @@ Claude-code-project/
 │  │  ├─ ratelimit.ts            # later slice (Upstash)
 │  │  ├─ email.ts                # later slice (Resend)
 │  │  ├─ license-pdf.tsx         # later slice (PDF)
-│  │  ├─ pricing.ts              # cart total, coupon, bundle logic (pure → unit-tested)
+│  │  ├─ pricing.ts              # price display, cart total; coupon maths in Phase 8 (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
 │  ├─ actions/                   # server actions: checkout.ts, beats.ts, orders.ts, plays.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
@@ -331,8 +332,8 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 4: Cart (days 11–12)
 
-- [ ] Zustand `cart` store persisted to localStorage; one tier per beat
-- [ ] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals, bundle, coupon) with unit tests
+- [x] Zustand `cart` store persisted to localStorage; one tier per beat
+- [ ] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals) with unit tests
 
 ### Phase 5: Stripe checkout (days 13–16)
 
@@ -371,7 +372,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] License tier template editor and per-beat price overrides
 - [ ] Orders table and detail page, refund (Stripe API)
 - [ ] Dashboard stats and charts (revenue by day, top beats)
-- [ ] Coupons CRUD (optional)
+- [ ] Coupons CRUD (optional), with the coupon maths in `lib/pricing.ts` (unit-tested) and a code field at checkout
 
 ### Phase 9: Polish (days 27–29)
 
@@ -400,7 +401,7 @@ Built one at a time, only once the v1 phases above work. Each slice brings its o
 
 ### Later ideas (v2)
 
-Make-an-offer for exclusives, Stripe Connect, PayPal, beat bundles and packs, sound kits, analytics (PostHog), newsletter, live mode.
+Make-an-offer for exclusives, Stripe Connect, PayPal, beat bundles and packs, a cart bundle deal ("buy 2 leases, get 1 free"), sound kits, analytics (PostHog), newsletter, live mode.
 
 ---
 

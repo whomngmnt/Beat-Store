@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_CART_ITEMS,
   beatIdSchema,
   beatSlugSchema,
+  cartItemsSchema,
   catalogSearchSchema,
 } from "../../src/lib/validators";
 
@@ -105,5 +107,41 @@ describe("beatIdSchema", () => {
     null,
   ])("rejects %j", (id) => {
     expect(beatIdSchema.safeParse(id).success).toBe(false);
+  });
+});
+
+describe("cartItemsSchema", () => {
+  const item = () => ({
+    beatId: crypto.randomUUID(),
+    licenseTierId: crypto.randomUUID(),
+  });
+
+  it("accepts an empty cart and a cart of different beats", () => {
+    expect(cartItemsSchema.safeParse([]).success).toBe(true);
+    expect(cartItemsSchema.safeParse([item(), item()]).success).toBe(true);
+  });
+
+  it("keeps only the two ids, so a price sent along is dropped", () => {
+    const { beatId, licenseTierId } = item();
+    expect(
+      cartItemsSchema.parse([{ beatId, licenseTierId, priceCents: 1 }]),
+    ).toEqual([{ beatId, licenseTierId }]);
+  });
+
+  it(`accepts ${MAX_CART_ITEMS} items but not one more`, () => {
+    const full = Array.from({ length: MAX_CART_ITEMS }, item);
+    expect(cartItemsSchema.safeParse(full).success).toBe(true);
+    expect(cartItemsSchema.safeParse([...full, item()]).success).toBe(false);
+  });
+
+  const a = item();
+  it.each([
+    ["one item instead of a list", a],
+    ["null", null],
+    ["a slug as the beat id", [{ ...a, beatId: "midnight-drive" }]],
+    ["a missing tier", [{ beatId: a.beatId }]],
+    ["the same beat twice", [a, { ...item(), beatId: a.beatId }]],
+  ])("rejects %s", (_label, value) => {
+    expect(cartItemsSchema.safeParse(value).success).toBe(false);
   });
 });

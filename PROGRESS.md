@@ -4,9 +4,9 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 3 is done. All 6 PLAN.md §8 boxes are ticked, and its 4 tasks are committed (`84b2647`, `d6ab260`, `3460384`, `52578f3`) and pushed to `origin/develop`. The player, waveform and play counting haven't been tested in a real browser yet: Claude in Chrome's tools weren't enabled this session. The local database has all 12 demo beats with placeholder previews. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 4 (cart) is in progress. Its plan is approved (3 tasks, see the log). Task 1, the cart store, is done and waiting for the user's review. It isn't committed yet. Phase 3 is committed and pushed, but the player, waveform and play counting still haven't been tested in a real browser. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** a browser check of Phase 3 (`/chrome` to enable Claude in Chrome, or by hand). Then Phase 4: cart (plan first).
+- **Next step:** the user reviews task 1 and says whether to commit. Then task 2: the server lookup (`getCartLines`, `getCart` action) and `cartTotalCents` in `pricing.ts`. The Phase 3 browser check is planned for task 3, together with the cart UI.
 
 ## Open questions
 
@@ -17,11 +17,48 @@ Claude updates this file at the end of each task. Newest entries go first in the
 Recorded 2026-11-07. The user said not to change any code for these now.
 
 - **Guest download link (Phase 5 or 6).** Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
-- **Guest email (Phase 4 or 5).** Default: take it from Stripe Checkout after payment, which is why `Order.email` is optional. Asking for the email on the cart page before checkout is the alternative, only if the user changes the default.
+- **Guest email (Phase 5).** Default: take it from Stripe Checkout after payment, which is why `Order.email` is optional. Asking for the email on the cart page before checkout is the alternative, only if the user changes the default. The approved Phase 4 plan keeps the default, so the cart has no email field.
 - **Admin sign-in (Phase 7).** The seed creates the admin `User` from `ADMIN_EMAIL` with `emailVerified: false` and no Google account linked. When Better Auth arrives, check that signing in with Google under that email links to this existing user instead of failing or creating a second one.
 - **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-10: Phase 4 plan, and task 1: cart store
+
+Phase 4 plan (user approved): 3 tasks, each reviewed and committed on its own. (1) cart store, (2) server lookup and cart total, (3) cart UI: "Add to cart", header cart button, drawer and `/cart` page. User decisions:
+
+- **The cart stays in localStorage, as ids only.** The user asked why it isn't saved on the server, so the buyer can't change prices. Answer: the cart holds only beat and tier ids, never a price. The server reads every price from the database, and at checkout (Phase 5) it saves the order with its own prices before Stripe sees anything. Editing the saved cart can only change what's in it, as clicking would. A database cart would need new tables, a cookie for guests and cleanup of abandoned carts, and it wouldn't add protection. The user then approved the localStorage plan.
+- **No bundle deal.** It moved to PLAN.md "Later ideas".
+- **No coupon yet.** The coupon maths moved to Phase 8, next to Coupons CRUD, with a code field at checkout.
+- **The header cart icon opens the drawer.**
+- **Guest email:** unchanged default (from Stripe Checkout), so the cart has no email field.
+
+Task 1:
+
+- `src/lib/validators.ts`:
+  - `cartItemsSchema` is a list of `{ beatId, licenseTierId }`, both UUIDs, with at most `MAX_CART_ITEMS` (20) items and no beat twice. `z.object` drops any other field, so a price added by hand never gets through.
+  - The `CartItem` type is inferred from the schema.
+  - Phase 5's checkout will use the same schema.
+- `src/store/cart.ts`: Zustand with `persist`, saved under the localStorage key `beat-store-cart`.
+  - **State:** `items`, plus `isOpen` for the drawer.
+  - **`add`:** if the beat is already in the cart, it swaps the tier in place (one tier per beat). Otherwise it appends the item, or returns `false` when the cart is full. `remove(beatId)`, `clear()` and `setOpen()` do what their names say.
+  - **`partialize`:** only `items` are saved, so the drawer starts closed on every page load.
+  - **`merge`:** the saved cart comes back from the browser, so it goes through `cartItemsSchema`. A broken or edited cart (bad JSON, not a list, a bad id, a beat twice) starts empty instead of breaking the page.
+  - **`skipHydration: true`:** the server can't read localStorage, so the store starts empty and the browser's first render matches the server's HTML. The cart UI (task 3) calls `useCartStore.persist.rehydrate()` after mounting. Checked in zustand 5.0.16's source: `persist` saves on every change, even before rehydrating, so the rehydrate must run on mount, before the user can click anything. Otherwise a click could overwrite the saved cart.
+- `vitest.config.mts` (new, **not in the plan**): `resolve: { tsconfigPaths: true }`, an option built into Vite 8.3.6, so no new package.
+  - **Why:** the store imports `@/lib/validators`, and Vitest couldn't resolve the `@/` alias ("Cannot find package"). Earlier tests only imported files without `@/` imports.
+  - **Why `.mts`:** a `.ts` file made Vite warn that `import` syntax was loaded as CommonJS (`package.json` has no `"type": "module"`).
+  - Added to the PLAN.md §6 tree.
+- Tests: 20 new, 53 in total.
+  - `tests/unit/cart-store.test.ts` (12): add, swap tier, full cart (refuses a new beat but still swaps a tier), remove and clear, only `items` saved, load a saved cart, a price added by hand is dropped, and 5 broken saved carts start empty.
+    - Node has no `localStorage` (`window` doesn't exist), and `persist` looks it up when the store is created. Without one, it doesn't save and logs a warning on every change. So `vi.hoisted` puts an in-memory stand-in on `window` before the store is imported.
+  - `tests/unit/validators.test.ts` (8): an empty and a 2-beat cart pass, a price is dropped, 20 items pass and 21 fail, and 5 bad inputs fail.
+- PLAN.md:
+  - §3 cart line: the bundle is gone, and the ids-only rule is written down.
+  - §6: the `pricing.ts` comment is updated, and `vitest.config.mts` is added.
+  - §8: the Phase 4 store box is ticked, the second box now says "(totals)", and the coupon maths is added to Phase 8's Coupons item. The bundle deal is in "Later ideas".
+- Checks: Prettier, lint, typecheck and 53 tests pass. No build: no page imports the store yet.
+- **For task 3:** once the UI imports the store, Zod reaches the browser bundle for store pages. It's already a dependency, but it's the first time Zod is sent to the browser.
 
 ### 2026-11-09: Phase 3 committed and pushed
 

@@ -50,3 +50,19 @@ export const beatSlugSchema = z
 
 // A beat id sent by the browser. Every id is a UUID (PLAN.md §4).
 export const beatIdSchema = z.uuid();
+
+export const MAX_CART_ITEMS = 20;
+
+// The cart: which beat and which license tier, nothing else. There's no
+// price in it, because prices always come from the database. `z.object`
+// drops any other field, such as a price someone added by hand. One tier
+// per beat, so a beat can't appear twice.
+export const cartItemsSchema = z
+  .array(z.object({ beatId: beatIdSchema, licenseTierId: z.uuid() }))
+  .max(MAX_CART_ITEMS)
+  .refine(
+    (items) => new Set(items.map((item) => item.beatId)).size === items.length,
+    "A beat can be in the cart only once",
+  );
+
+export type CartItem = z.infer<typeof cartItemsSchema>[number];
