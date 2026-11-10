@@ -4,7 +4,7 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 4 (cart) code is complete. Both PLAN.md §8 Phase 4 boxes are ticked. Tasks 1 and 2 are committed (`48b6576`, `cd87683`) and pushed. Task 3, the cart UI, is reviewed and approved by the user, with Zod replaced in the browser. Neither the cart UI nor Phase 3's player has been tested in a real browser: the Claude in Chrome extension wasn't connected. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 4 (cart) code is complete. Both PLAN.md §8 Phase 4 boxes are ticked. All 3 tasks are committed (`48b6576`, `cd87683`, `b539e87`) and pushed to `origin/develop`. Neither the cart UI nor Phase 3's player has been tested in a real browser: the Claude in Chrome extension wasn't connected. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
 - **Next step:** a browser check of Phases 3 and 4: the checklist is in the task 3 log entry. Run it by hand, or connect Claude in Chrome first. After that, Phase 5: Stripe checkout (plan first).
 
@@ -23,7 +23,7 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-10: Phase 4 task 3: cart UI
+### 2026-11-10: Phase 4 task 3: cart UI (commit `b539e87`)
 
 It follows the approved Phase 4 plan for task 3.
 
