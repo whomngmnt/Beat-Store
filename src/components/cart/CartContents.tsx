@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { getCart } from "@/actions/cart";
+import { CheckoutButton } from "@/components/cart/CheckoutButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatPrice } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ export function CartContents() {
   // After a change, the old answer stays on screen, dimmed, until the new
   // one arrives. That avoids a flash of "Loading" on every Remove.
   const stale = loaded.items !== items;
+  const hasProblem = lines.some((line) => line.problem !== null);
 
   return (
     <div
@@ -115,12 +117,15 @@ export function CartContents() {
         <span>Total</span>
         <span>{formatPrice(totalCents)}</span>
       </div>
-      {lines.some((line) => line.problem !== null) && (
+      {hasProblem && (
         <p className="text-sm text-muted-foreground">
           Lines marked in red can&apos;t be bought right now and aren&apos;t in
-          the total.
+          the total. Remove them to check out.
         </p>
       )}
+      {/* Off while the shown lines are for an older cart, or any line can't
+          be bought. The server checks everything again anyway. */}
+      <CheckoutButton items={items} disabled={stale || hasProblem} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   beatSlugSchema,
   cartItemsSchema,
   catalogSearchSchema,
+  checkoutSessionIdSchema,
 } from "../../src/lib/validators";
 
 describe("catalogSearchSchema", () => {
@@ -143,5 +144,24 @@ describe("cartItemsSchema", () => {
     ["the same beat twice", [a, { ...item(), beatId: a.beatId }]],
   ])("rejects %s", (_label, value) => {
     expect(cartItemsSchema.safeParse(value).success).toBe(false);
+  });
+});
+
+describe("checkoutSessionIdSchema", () => {
+  it("accepts a test-mode Checkout Session id", () => {
+    expect(
+      checkoutSessionIdSchema.safeParse("cs_test_a1B2c3D4e5F6g7H8").success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["a live-mode id", "cs_live_a1B2c3"],
+    ["another kind of id", "pi_test_a1B2c3"],
+    ["the unfilled template", "{CHECKOUT_SESSION_ID}"],
+    ["SQL", "cs_test_1' OR '1'='1"],
+    ["an array", ["cs_test_a1", "cs_test_b2"]],
+    ["nothing", undefined],
+  ])("rejects %s", (_label, value) => {
+    expect(checkoutSessionIdSchema.safeParse(value).success).toBe(false);
   });
 });

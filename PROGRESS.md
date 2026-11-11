@@ -4,24 +4,100 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 4 (cart) code is complete. Both PLAN.md §8 Phase 4 boxes are ticked. All 3 tasks are committed (`48b6576`, `cd87683`, `b539e87`) and pushed to `origin/develop`. Neither the cart UI nor Phase 3's player has been tested in a real browser: the Claude in Chrome extension wasn't connected. The PLAN.md §8 Phase 1 seed box stays unticked: the demo audio is a placeholder until the user makes their own beats.
+- **Stage:** Phase 5 (Stripe checkout) code is written and tested, **not committed yet**: waiting for the user's review. 7 of the 10 PLAN.md §8 Phase 5 boxes are ticked. The other 3 are the user's (accounts, Stripe CLI install and `stripe login`, a run with `stripe listen`). Nothing has been paid through real Stripe yet: `.env` has no Stripe test key.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** a browser check of Phases 3 and 4: the checklist is in the task 3 log entry. Run it by hand, or connect Claude in Chrome first. After that, Phase 5: Stripe checkout (plan first).
+- **Next step:** the user reviews the Phase 5 diff. Then they make a Stripe test account, put the keys in `.env` and run the manual checkout checklist in the 2026-11-11 log entry. Commit after that, on `develop`.
 
 ## Open questions
 
+- **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. Everything below is open to change in review.
+- **Timing change from PLAN.md (needs the user's OK).** Stripe refuses a session that expires less than 30 minutes after it creates it, so "now + 30 min" counted on our server can fail. The session now lasts 31 minutes and the exclusive hold 35, so the hold can't run out while the buyer can still pay. PLAN.md §5.2 and §5.4, `exclusives.md` and `stripe-checkout.md` were changed to match.
+- **New schema fields (needs the user's OK).** `Order.reviewNote` (a payment that doesn't match the order) and `OrderItem.refundNeeded` / `refundedAt` (the lost-exclusive refund the cron job retries). PLAN.md §5.2 needs both, but §4 didn't have them. Migration `20261111065236_phase5_review_and_refund`.
+- **Cancel blocks your own exclusive.** If a buyer cancels on Stripe's page, their exclusive stays held until the session expires (up to 31 min), so they can't check it out again until then. A possible fix: put the order id in the cancel URL and have the cancel page expire the Stripe session. Not built: the decision is the user's.
+- **An expired hold looks reserved until it's freed.** The cart blocks the exclusive of any RESERVED beat, even when `reservedUntil` has passed, until the `checkout.session.expired` webhook or the cron job frees it. The reservation SQL's "take over an expired hold" branch is then only a safety net.
+- **Vercel Cron limits (Phase 10).** The plan runs the cron routes every 5 minutes. Check Vercel's current plan limits when deploying: the Hobby plan has allowed only daily cron jobs. No `vercel.json` yet: deploying is Phase 10.
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
 ## Decisions needed later
 
 Recorded 2026-11-07. The user said not to change any code for these now.
 
-- **Guest download link (Phase 5 or 6).** Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
-- **Guest email (Phase 5).** Default: take it from Stripe Checkout after payment, which is why `Order.email` is optional. Asking for the email on the cart page before checkout is the alternative, only if the user changes the default. The approved Phase 4 plan keeps the default, so the cart has no email field.
+- **Guest download link (Phase 6, still open).** Phase 5 shows each item's files on the success page but no download buttons yet. Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
+- **Guest email (Phase 5): done with the default.** Fulfilment saves the email the buyer typed in Stripe Checkout (`customer_details.email`) on the order.
 - **Admin sign-in (Phase 7).** The seed creates the admin `User` from `ADMIN_EMAIL` with `emailVerified: false` and no Google account linked. When Better Auth arrives, check that signing in with Google under that email links to this existing user instead of failing or creating a second one.
-- **Neon time zone (when Neon is set up, Phase 5).** Remind the user at that point. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
+- **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-11: Phase 5: Stripe checkout (not committed yet)
+
+The user asked for every Phase 5 task at once, explained afterwards, so this skipped the plan-first step.
+
+- **Dependency:** `stripe` 23.1.0 (in the CLAUDE.md stack). It pins API version `2026-10-28.endive`.
+  - **Removed option:** this version dropped `payment_method_types` from Checkout Sessions, so the code uses its replacement, `allowed_payment_method_types: ["card"]`.
+  - **Lazy client:** `new Stripe()` throws without a key, and `next build` loads route modules where CI has no key. So the client is made on first use.
+- **Schema:** `Order.reviewNote`, `OrderItem.refundNeeded`, `OrderItem.refundedAt` (see Open questions). PLAN.md §4 lists them.
+- `src/lib/stripe.ts`: `getStripe()`. It refuses any key that doesn't start with `sk_test_`, so a live key can't take real payments.
+- `src/lib/reservation.ts`:
+  - `reserveExclusive(tx, beatId, orderId)`: the plan's one conditional UPDATE, with a 35-minute hold, through tagged `$executeRaw`. It returns true only if exactly 1 row changed.
+  - `releaseReservations(client, orderId)`: frees only RESERVED beats this order holds, so a SOLD beat stays sold.
+  - `releaseExpiredReservations()`: the cron's query.
+  - All times use the database's `now()`.
+- `src/actions/checkout.ts`: `createCheckoutSession(items: unknown)`.
+  1. **Input:** Zod checks the cart.
+  2. **Prices:** `getCartLines` re-reads every price, and any line with a problem stops checkout.
+  3. **Order:** one transaction creates the PENDING order with title/tier/price snapshots and reserves each exclusive. A lost reservation throws, which rolls the order back: "This exclusive was just taken…".
+  4. **Stripe session:** price_data lines, `metadata.orderId`, `expires_at` = now + 31 min, success/cancel URLs. Idempotency key `checkout-<orderId>`.
+  5. **Stripe fails:** the exclusives are freed and the order becomes FAILED.
+  - **No auth guard on purpose:** guests can buy. `userId` is set in Phase 7.
+  - **Supporting change:** `CartLine` gained `tierCode`, so checkout can find the exclusives.
+- `src/lib/fulfilment.ts`:
+  - **`sessionProblem(session, order)`:** pure. It checks the session id, `payment_status === "paid"`, the amount and the currency.
+  - **`fulfilOrder(session, eventId?)`:**
+    - **Mismatch:** a problem is logged, saved in `reviewNote`, and the order isn't fulfilled.
+    - **The transaction (database only):** insert `WebhookEvent`, `updateMany` the order PENDING → PAID (with the email and the PaymentIntent id), SOLD each exclusive `WHERE reservedByOrderId = order.id`, and create `Download` rows from the tier's file flags.
+    - **Idempotency:** a duplicate event fails on the primary key (P2002), which means "already done". A second run without an event id (the success page) finds 0 PENDING rows and stops.
+    - **A lost exclusive** gets `refundNeeded` and no downloads.
+  - **`refundLostExclusives(orderId?)`:** runs after commit, and the cron calls it with no id. `refunds.create` uses idempotency key `refund-<orderItemId>` and sets `refundedAt` on success. A failure is logged, never thrown.
+  - **`expireOrder` / `markOrderRefunded`:** handle the expired and refunded events. REFUNDED needs a full refund (`charge.refunded === true`), so a partial lost-exclusive refund leaves the rest of the order downloadable.
+  - **`confirmCheckout(sessionId)`:** for the success page. If the order is still PENDING, it fetches the session from Stripe and runs `fulfilOrder()`.
+- `src/app/api/webhooks/stripe/route.ts`:
+  - **Signature:** reads `await request.text()` and checks it with `constructEvent`. A bad or missing signature gives 400.
+  - **Events handled:** `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`.
+  - **Missing secret:** 500, so Stripe retries once it's set.
+- `src/app/api/cron/release-reservations` and `fulfilment-retry`:
+  - **Auth:** `Authorization: Bearer <CRON_SECRET>`, Vercel's pattern. An unset secret refuses everything, so `Bearer ` can't pass.
+  - **Response:** each returns a count.
+- **Pages:**
+  - **`/checkout/success`:** `session_id` is checked with Zod and used only as a lookup key. It shows Not found, Confirming (or a review problem), Not completed (EXPIRED/FAILED), or the paid items with their files, refunded lost exclusives and the total.
+  - **The cart** is cleared by `ClearCart` on PAID. Download buttons come in Phase 6.
+  - **`/checkout/cancel`:** static. Nothing was charged and the cart is kept.
+  - **`CheckoutButton`:** in `CartContents` (drawer and `/cart`). It's off while a line has a problem or the shown lines are stale, and it shows the server's error message.
+- **Tests:**
+  - **The split:** `pnpm test` is now the unit project only. `pnpm test:integration` runs against the local Docker DB, which must be migrated and seeded. Configured with Vitest `projects` in `vitest.config.mts`.
+  - **Unit:** `fulfilment.test.ts` (sessionProblem, 9), `stripe.test.ts` (key check, 4) and `checkoutSessionIdSchema` (7). 111 unit tests in total.
+  - **Integration, 20 tests in 3 files.** Each makes its own beat and deletes it afterwards. Stripe network calls are faked, and the signatures are real (`generateTestHeaderString`).
+    - **checkout:** 20 concurrent checkouts give exactly 1 reservation, 1 order and 1 Stripe call; a browser price is ignored; a Stripe failure gives FAILED and frees the beat; a SOLD line or an empty cart is refused.
+    - **webhook:** a tampered body or no signature gives 400; a wrong amount, an unpaid session or another currency isn't fulfilled; the same event twice, and 6 deliveries plus 2 success-page runs at once, fulfil exactly once; an exclusive becomes SOLD with 3 files; a lost exclusive is refunded with the right idempotency key, or kept for the cron when Stripe fails; expiry frees the beat; only a full refund gives REFUNDED.
+    - **cron:** a missing, wrong or empty secret gives 401; only holds that have run out are freed.
+  - **What the first run caught:** a test that assumed a second buyer could take an expired hold before it was freed. See Open questions.
+- **Checks:**
+  - **Static checks:** Prettier, lint, typecheck, 111 unit tests, 20 integration tests and the build pass.
+  - **Against `pnpm start` on port 3001:**
+    - The webhook gave 400 with no signature or a fake one.
+    - Both cron routes gave 401 with no auth, a wrong secret or `x-middleware-subrequest`.
+    - `/checkout/success` with an unknown or bad id said "Order not found".
+    - `/checkout/cancel` gave 200.
+  - **Browser chunks:** none contain a secret's name or the reservation code. The server was stopped by PID afterwards.
+- **Not tested yet:** a real payment through Stripe, and the UI in a browser. Checklist, once `.env` has a Stripe test key:
+  1. `stripe login`, then `stripe listen --forward-to localhost:3000/api/webhooks/stripe`. Put the printed `whsec_…` in `STRIPE_WEBHOOK_SECRET` and restart `pnpm dev`.
+  2. Cart with Basic + Exclusive → Checkout → `4242 4242 4242 4242`. The success page shows PAID and the files, the cart empties, and the beat leaves the catalog (SOLD).
+  3. `4000 0000 0000 9995`: Stripe shows a decline, and the order stays PENDING (EXPIRED after 31 min).
+  4. `4000 0025 0000 3155`: 3-D Secure, then paid.
+  5. `stripe events resend <evt_id>` for a completed event: no second fulfilment (same Download rows).
+  6. The back button on Stripe's page leads to `/checkout/cancel`, and the cart is kept.
+  7. A full refund in the Stripe dashboard makes the order REFUNDED.
+- PLAN.md: §4 fields, §5.2/§5.4 timings, §6 new files, and §8 Phase 5 boxes 2–8 ticked.
 
 ### 2026-11-10: Phase 4 task 3: cart UI (commit `b539e87`)
 

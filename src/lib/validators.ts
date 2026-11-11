@@ -64,3 +64,10 @@ export const cartItemsSchema = z
     (items) => new Set(items.map((item) => item.beatId)).size === items.length,
     "A beat can be in the cart only once",
   );
+
+// The session_id Stripe puts in the success page URL. It's only used to
+// look the order up. Test mode only, so it always starts with cs_test_.
+export const checkoutSessionIdSchema = z
+  .string()
+  .max(255)
+  .regex(/^cs_test_[A-Za-z0-9]+$/);

@@ -18,7 +18,7 @@ Test mode only: `sk_test_` / `pk_test_` keys and no live-mode code paths. The si
 
 - `createCheckoutSession` re-reads every price from the DB and checks that each beat is PUBLISHED.
 - In one transaction, create the PENDING order and reserve any exclusive (see `exclusives.md`).
-- The session gets `metadata.orderId` and `expires_at` = now + 30 min. If Stripe fails, release the reservation and mark the order FAILED.
+- The session gets `metadata.orderId` and `expires_at` = now + 31 min (Stripe's minimum is 30 min from when it creates the session). If Stripe fails, release the reservation and mark the order FAILED.
 
 ## Webhook (`POST /api/webhooks/stripe`)
 

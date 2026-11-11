@@ -223,6 +223,8 @@ export type CartLine = {
   slug: string | null;
   title: string | null;
   tierName: string | null;
+  // Checkout uses it to find the exclusives it must reserve.
+  tierCode: LicenseCode | null;
   // The price from the database, or null when the line can't be bought.
   priceCents: number | null;
   // Why the line can't be bought, shown to the buyer. null when it can.
@@ -263,6 +265,7 @@ export async function getCartLines(items: CartItem[]): Promise<CartLine[]> {
         slug: null,
         title: null,
         tierName: null,
+        tierCode: null,
         priceCents: null,
         problem: "No longer available",
       };
@@ -274,6 +277,7 @@ export async function getCartLines(items: CartItem[]): Promise<CartLine[]> {
       slug: row.beat.slug,
       title: row.beat.title,
       tierName: row.licenseTier.name,
+      tierCode: row.licenseTier.code,
       priceCents: problem === null ? row.priceCents : null,
       problem,
     };

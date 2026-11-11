@@ -102,13 +102,16 @@ BeatLicense   id, beatId, licenseTierId, priceCents, active
 Order         id, userId?, email?, status (PENDING|PAID|EXPIRED|REFUNDED|FAILED),
               stripeSessionId? (unique), stripePaymentIntentId?, totalCents,
               currency (default "usd"), couponId?, downloadTokenHash? (unique),
-              downloadTokenExpiresAt?, fulfilledAt?, createdAt, paidAt?
+              downloadTokenExpiresAt?, fulfilledAt?, createdAt, paidAt?, reviewNote?
               ← the order is created before the Stripe session, so the Stripe ids, token
                 and paidAt are filled in later. A guest's email comes from Stripe Checkout
-                after payment.
+                after payment. reviewNote is set when a payment doesn't match the order
+                (5.2 step 5); such an order isn't fulfilled.
               later slice (email): emailSentAt?
 OrderItem     id, orderId, beatId, licenseTierId, priceCents,
-              beatTitleSnapshot, licenseNameSnapshot
+              beatTitleSnapshot, licenseNameSnapshot, refundNeeded (default false), refundedAt?
+              ← refundNeeded marks an exclusive another buyer got first (5.2 step 6);
+                refundedAt is set once Stripe accepts the refund, so cron can retry until then
               later slice (PDF): licensePdfKey?
 Download      id, orderItemId, fileType (MP3|WAV|STEMS), count, maxCount (default 5), lastAt?
               @@unique([orderItemId, fileType])
@@ -149,14 +152,14 @@ Key rules:
 1. The client sends the cart (`[{beatId, licenseTierId}]`) to the server action `createCheckoutSession` (rate-limited).
 2. The server **re-reads prices from the DB** (it never trusts client prices) and checks every beat is PUBLISHED.
 3. In **one DB transaction** it creates the `PENDING` Order and, for each EXCLUSIVE item, **reserves the beat atomically** (see 5.4). If a reservation fails, the whole transaction rolls back and the buyer sees "this exclusive was just taken".
-4. The server creates a Stripe Checkout Session with `line_items` (price_data), `metadata.orderId`, `expires_at = now + 30 min`, and success/cancel URLs. It saves `stripeSessionId` and returns the URL, and the client redirects. If creating the session fails, it releases the reservation and marks the order FAILED.
+4. The server creates a Stripe Checkout Session with `line_items` (price_data), `metadata.orderId`, `expires_at = now + 31 min` (Stripe requires at least 30 min from when it creates the session, so exactly 30 can be refused), and success/cancel URLs. It saves `stripeSessionId` and returns the URL, and the client redirects. If creating the session fails, it releases the reservation and marks the order FAILED.
 5. Stripe sends `checkout.session.completed` to `POST /api/webhooks/stripe`. The handler:
    - reads the **raw body** (`await req.text()`, not `req.json()`) and verifies it with `stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET)`. On failure it returns 400.
    - fulfils only if `session.payment_status === "paid"`, `amount_total === order.totalCents` and `currency` matches. Otherwise it logs, flags the order for review and does not fulfil.
 6. **Fulfilment transaction**, which only touches the database:
    - `INSERT WebhookEvent(id = event.id)`. The primary key makes this the idempotency guard. A concurrent or repeated delivery hits a unique-violation and is treated as "already done", returning 200.
    - `UPDATE Order SET status = PAID, paidAt = now WHERE id = ? AND status = PENDING`
-   - for EXCLUSIVE items: `UPDATE Beat SET status = SOLD WHERE id = ? AND reservedByOrderId = order.id`. If 0 rows change (another buyer won the beat), mark that item for **automatic refund**.
+   - for EXCLUSIVE items: `UPDATE Beat SET status = SOLD WHERE id = ? AND reservedByOrderId = order.id`. If 0 rows change (another buyer won the beat), mark that item for **automatic refund** (`OrderItem.refundNeeded`).
    - create `Download` rows
    - commit
 7. **After the commit**, run the side effects. These don't depend on the webhook retrying, so they must be safe to run again:
@@ -184,11 +187,13 @@ The problem is that two buyers can both pass the "not sold" check and both pay b
 
 ```sql
 UPDATE "Beat"
-SET status = 'RESERVED', "reservedByOrderId" = $orderId, "reservedUntil" = now() + interval '30 minutes'
+SET status = 'RESERVED', "reservedByOrderId" = $orderId, "reservedUntil" = now() + interval '35 minutes'
 WHERE id = $beatId
   AND (status = 'PUBLISHED' OR (status = 'RESERVED' AND "reservedUntil" < now()));
 -- 1 row changed → reserved. 0 rows changed → someone else has it.
 ```
+
+- The hold (35 min) outlasts the Stripe session (31 min), so it can't run out while the buyer can still pay.
 
 - It's a single conditional UPDATE, so Postgres row locking guarantees only one winner. It's the same pattern as a coupon "claim" race (the CouponRush problem).
 - RESERVED beats show "Reserved, check back soon" and can't be added to the cart as Exclusive. Leases stay purchasable.
@@ -230,6 +235,7 @@ Claude-code-project/
 │  │  ├─ (store)/beats/[slug]/opengraph-image.tsx   # share image for social links
 │  │  ├─ (store)/cart/page.tsx
 │  │  ├─ (store)/checkout/success/page.tsx
+│  │  ├─ (store)/checkout/cancel/page.tsx
 │  │  ├─ (store)/account/page.tsx
 │  │  ├─ (store)/licenses|faq|contact|terms|privacy/page.tsx
 │  │  ├─ admin/(dashboard|beats|beats/new|beats/[id]|orders|coupons)/page.tsx
@@ -244,7 +250,7 @@ Claude-code-project/
 │  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
 │  │  ├─ player/PlayerBar.tsx, PlayButton.tsx, Waveform.tsx
 │  │  ├─ beats/BeatCard.tsx, BeatGrid.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
-│  │  ├─ cart/CartButton.tsx, CartDrawer.tsx, CartContents.tsx
+│  │  ├─ cart/CartButton.tsx, CartDrawer.tsx, CartContents.tsx, CheckoutButton.tsx, ClearCart.tsx
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
@@ -266,7 +272,8 @@ Claude-code-project/
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
-│  ├─ unit/pricing.test.ts, validators.test.ts
+│  ├─ unit/pricing.test.ts, validators.test.ts, fulfilment.test.ts, stripe.test.ts, …
+│  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts   # real Postgres: pnpm test:integration
 │  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts   # later slice (Playwright)
 └─ .github/workflows/ci.yml
 ```
@@ -339,13 +346,13 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ### Phase 5: Stripe checkout (days 13–16)
 
 - [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
-- [ ] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
-- [ ] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 30 min
-- [ ] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction
-- [ ] `lib/fulfilment.ts`: DB-only transaction, then retryable side effects (refund; PDF and email come with their later slices)
-- [ ] Handle `checkout.session.expired` and `charge.refunded`; cron routes for retrying fulfilment and releasing reservations
-- [ ] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
-- [ ] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
+- [x] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
+- [x] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 31 min (Stripe's minimum is 30)
+- [x] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction
+- [x] `lib/fulfilment.ts`: DB-only transaction, then retryable side effects (refund; PDF and email come with their later slices)
+- [x] Handle `checkout.session.expired` and `charge.refunded`; cron routes for retrying fulfilment and releasing reservations
+- [x] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
+- [x] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
 - [ ] Install the Stripe CLI and run `stripe login`
 - [ ] Local testing: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 

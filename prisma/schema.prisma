@@ -148,6 +148,10 @@ model Order {
   fulfilledAt            DateTime?
   createdAt              DateTime    @default(now())
   paidAt                 DateTime?
+  // Set when Stripe reports a payment that doesn't match this order (not
+  // paid, or a different amount or currency). The order is then not
+  // fulfilled, and an admin has to look at it.
+  reviewNote             String?
 
   items         OrderItem[]
   reservedBeats Beat[]
@@ -166,6 +170,12 @@ model OrderItem {
   priceCents          Int
   beatTitleSnapshot   String
   licenseNameSnapshot String
+  // An exclusive that another buyer got first (PLAN.md §5.4): this item is
+  // paid but not delivered, and gets refunded after the fulfilment commit.
+  // refundedAt stays empty until Stripe has accepted the refund, so the
+  // cron job can retry it.
+  refundNeeded        Boolean     @default(false)
+  refundedAt          DateTime?
 
   downloads Download[]
 }

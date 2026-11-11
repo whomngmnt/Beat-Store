@@ -13,12 +13,13 @@ paths:
 
   ```sql
   UPDATE "Beat"
-  SET status = 'RESERVED', "reservedByOrderId" = $orderId, "reservedUntil" = now() + interval '30 minutes'
+  SET status = 'RESERVED', "reservedByOrderId" = $orderId, "reservedUntil" = now() + interval '35 minutes'
   WHERE id = $beatId
     AND (status = 'PUBLISHED' OR (status = 'RESERVED' AND "reservedUntil" < now()));
   ```
 
   1 row changed means reserved. 0 rows means someone else has it: roll back and show "this exclusive was just taken".
+  The hold (35 min) outlasts the Stripe session (31 min), so it can't run out while the buyer can still pay.
 - Never SELECT-then-UPDATE for reservations, download counts or coupon claims. Use one atomic conditional statement.
 - Raw SQL goes through Prisma's tagged `$executeRaw` / `$queryRaw`, so values are parameters. Never build SQL strings by hand or use the `Unsafe` variants.
 - RESERVED beats show "Reserved, check back soon" and can't be added to the cart as Exclusive. Leases stay purchasable.
