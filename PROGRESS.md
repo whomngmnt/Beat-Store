@@ -4,15 +4,15 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 5 (Stripe checkout) code is written and tested, **not committed yet**: waiting for the user's review. 7 of the 10 PLAN.md §8 Phase 5 boxes are ticked. The other 3 are the user's (accounts, Stripe CLI install and `stripe login`, a run with `stripe listen`). Nothing has been paid through real Stripe yet: `.env` has no Stripe test key.
+- **Stage:** Phase 5 (Stripe checkout) code is committed (`aa610f2`) and pushed to `origin/develop`. 7 of the 10 PLAN.md §8 Phase 5 boxes are ticked. The other 3 are the user's (accounts, Stripe CLI install and `stripe login`, a run with `stripe listen`). Nothing has been paid through real Stripe yet: `.env` has no Stripe test key.
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** the user reviews the Phase 5 diff. Then they make a Stripe test account, put the keys in `.env` and run the manual checkout checklist in the 2026-11-11 log entry. Commit after that, on `develop`.
+- **Next step:** the user makes a Stripe test account, puts the keys in `.env`, installs the Stripe CLI and runs the manual checkout checklist in the 2026-11-11 log entry. The R2, Neon and Google OAuth accounts are also still to make (check Neon's time zone then). After that, Phase 6: delivery (the guest download link decision comes first).
 
 ## Open questions
 
-- **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. Everything below is open to change in review.
-- **Timing change from PLAN.md (needs the user's OK).** Stripe refuses a session that expires less than 30 minutes after it creates it, so "now + 30 min" counted on our server can fail. The session now lasts 31 minutes and the exclusive hold 35, so the hold can't run out while the buyer can still pay. PLAN.md §5.2 and §5.4, `exclusives.md` and `stripe-checkout.md` were changed to match.
-- **New schema fields (needs the user's OK).** `Order.reviewNote` (a payment that doesn't match the order) and `OrderItem.refundNeeded` / `refundedAt` (the lost-exclusive refund the cron job retries). PLAN.md §5.2 needs both, but §4 didn't have them. Migration `20261111065236_phase5_review_and_refund`.
+- **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. After reading the summary, which listed the timing change and the new fields below, the user asked to commit and push. So both are in `aa610f2`, and either can still change if the user says so.
+- **Timing change from PLAN.md (committed).** Stripe refuses a session that expires less than 30 minutes after it creates it, so "now + 30 min" counted on our server can fail. The session now lasts 31 minutes and the exclusive hold 35, so the hold can't run out while the buyer can still pay. PLAN.md §5.2 and §5.4, `exclusives.md` and `stripe-checkout.md` were changed to match.
+- **New schema fields (committed).** `Order.reviewNote` (a payment that doesn't match the order) and `OrderItem.refundNeeded` / `refundedAt` (the lost-exclusive refund the cron job retries). PLAN.md §5.2 needs both, but §4 didn't have them. Migration `20261111065236_phase5_review_and_refund`.
 - **Cancel blocks your own exclusive.** If a buyer cancels on Stripe's page, their exclusive stays held until the session expires (up to 31 min), so they can't check it out again until then. A possible fix: put the order id in the cancel URL and have the cancel page expire the Stripe session. Not built: the decision is the user's.
 - **An expired hold looks reserved until it's freed.** The cart blocks the exclusive of any RESERVED beat, even when `reservedUntil` has passed, until the `checkout.session.expired` webhook or the cron job frees it. The reservation SQL's "take over an expired hold" branch is then only a safety net.
 - **Vercel Cron limits (Phase 10).** The plan runs the cron routes every 5 minutes. Check Vercel's current plan limits when deploying: the Hobby plan has allowed only daily cron jobs. No `vercel.json` yet: deploying is Phase 10.
@@ -29,7 +29,7 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-11: Phase 5: Stripe checkout (not committed yet)
+### 2026-11-11: Phase 5: Stripe checkout (commit `aa610f2`)
 
 The user asked for every Phase 5 task at once, explained afterwards, so this skipped the plan-first step.
 
@@ -98,6 +98,7 @@ The user asked for every Phase 5 task at once, explained afterwards, so this ski
   6. The back button on Stripe's page leads to `/checkout/cancel`, and the cart is kept.
   7. A full refund in the Stripe dashboard makes the order REFUNDED.
 - PLAN.md: §4 fields, §5.2/§5.4 timings, §6 new files, and §8 Phase 5 boxes 2–8 ticked.
+- Committed as `aa610f2` and pushed to `origin/develop` when the user asked, after reading the summary. The pre-commit hook (lint-staged) passed. `.env` wasn't staged: files were added by name.
 
 ### 2026-11-10: Phase 4 task 3: cart UI (commit `b539e87`)
 
