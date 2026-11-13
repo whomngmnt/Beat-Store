@@ -40,7 +40,7 @@ pnpm db:seed                         # license tiers, admin user, ~12 demo beats
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test
 pnpm audit --audit-level=high
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
+stripe listen --events checkout.session.completed,checkout.session.expired,charge.refunded --forward-to localhost:3000/api/webhooks/stripe
 ```
 
 Run lint, typecheck and the relevant tests before calling a task done.

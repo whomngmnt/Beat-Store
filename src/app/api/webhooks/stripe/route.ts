@@ -1,6 +1,7 @@
 // Stripe webhook (PLAN.md §5.2, .claude/rules/stripe-checkout.md).
-// Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
-// prints the STRIPE_WEBHOOK_SECRET to put in .env.
+// Locally: `stripe listen --events checkout.session.completed,checkout.session.expired,charge.refunded --forward-to localhost:3000/api/webhooks/stripe`
+// prints the STRIPE_WEBHOOK_SECRET to put in .env. (Stripe CLI 1.55+
+// requires --events.)
 //
 // No requireUser() / requireAdmin(): Stripe calls this, not a person. The
 // signature check below is what proves the request comes from Stripe.
