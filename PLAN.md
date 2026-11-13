@@ -257,7 +257,8 @@ Claude-code-project/
 │  │  ├─ cart.ts                 # cart limit and type, browser check of the saved cart (no Zod)
 │  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination; cart lines
 │  │  ├─ stripe.ts
-│  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signUrl(), presignUpload()
+│  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signDownloadUrl(), presignUpload()
+│  │  ├─ downloads.ts            # admin fixes: resetDownloadCount(), reissueDownloadToken()
 │  │  ├─ auth.ts
 │  │  ├─ auth-guards.ts          # requireUser(), requireAdmin(): called in every protected page/route/action
 │  │  ├─ fulfilment.ts           # idempotent fulfilOrder() + post-commit side effects
@@ -272,8 +273,8 @@ Claude-code-project/
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
-│  ├─ unit/pricing.test.ts, validators.test.ts, fulfilment.test.ts, stripe.test.ts, …
-│  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts   # real Postgres: pnpm test:integration
+│  ├─ unit/pricing.test.ts, validators.test.ts, fulfilment.test.ts, stripe.test.ts, tokens.test.ts, storage.test.ts, …
+│  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts, download.test.ts   # real Postgres: pnpm test:integration
 │  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts   # later slice (Playwright)
 └─ .github/workflows/ci.yml
 ```
@@ -345,7 +346,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 5: Stripe checkout (days 13–16)
 
-- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in
+- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in (Stripe done; R2, Neon and Google still to do)
 - [x] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
 - [x] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 31 min (Stripe's minimum is 30)
 - [x] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction
@@ -354,15 +355,15 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [x] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
 - [x] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
 - [x] Install the Stripe CLI and run `stripe login` (or give it the test key with `STRIPE_API_KEY`)
-- [ ] Local testing: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
+- [x] Local testing: `stripe listen --events checkout.session.completed,checkout.session.expired,charge.refunded --forward-to localhost:3000/api/webhooks/stripe` (Stripe CLI 1.55 requires `--events`)
 
 ### Phase 6: Delivery (days 17–19)
 
-- [ ] `lib/storage.ts` with signed GET URLs
-- [ ] `lib/tokens.ts`: 32-byte random guest token, only its SHA-256 hash stored, 30-day expiry
-- [ ] Download route: owner or token check, PAID check, atomic `count < maxCount` limit (5 per file), 10-min signed URL
-- [ ] Exclusive sale marks the beat SOLD (only if it's still reserved by this order) and hides it from the catalog
-- [ ] Admin: reset download count / reissue guest token
+- [x] `lib/storage.ts` with signed GET URLs
+- [x] `lib/tokens.ts`: 32-byte random guest token, only its SHA-256 hash stored, 30-day expiry (made at checkout; the raw token rides in the Stripe `success_url`, so the success page is the bookmarkable download link)
+- [x] Download route: owner or token check, PAID check, atomic `count < maxCount` limit (5 per file), 10-min signed URL (token check only until Phase 7 adds the signed-in owner)
+- [x] Exclusive sale marks the beat SOLD (only if it's still reserved by this order) and hides it from the catalog (built in Phase 5)
+- [ ] Admin: reset download count / reissue guest token (the functions and tests are in `lib/downloads.ts`; the buttons on the admin order page need `requireAdmin()` from Phase 7 and the admin panel from Phase 8)
 
 ### Phase 7: Auth & account (days 20–21)
 

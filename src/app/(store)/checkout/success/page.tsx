@@ -4,7 +4,8 @@ import { ClearCart } from "@/components/cart/ClearCart";
 import { buttonVariants } from "@/components/ui/button";
 import { confirmCheckout } from "@/lib/fulfilment";
 import { formatPrice } from "@/lib/pricing";
-import { checkoutSessionIdSchema } from "@/lib/validators";
+import { tokenMatches } from "@/lib/tokens";
+import { checkoutSessionIdSchema, downloadTokenSchema } from "@/lib/validators";
 
 export const metadata: Metadata = {
   title: "Your order",
@@ -18,12 +19,16 @@ const fileNames = { MP3: "MP3", WAV: "WAV", STEMS: "Stems (ZIP)" } as const;
 // the database and the payment from Stripe, and if the webhook hasn't
 // arrived yet it fulfils the order itself. So the files show here even
 // without the webhook. Reading searchParams renders the page per request.
+//
+// The URL also carries the guest download token (`token`, PLAN.md §5.1),
+// so this page is the buyer's bookmarkable download link. The download
+// buttons show only when the token matches this order and hasn't expired.
 export default async function CheckoutSuccessPage({
   searchParams,
 }: PageProps<"/checkout/success">) {
-  const sessionId = checkoutSessionIdSchema.safeParse(
-    (await searchParams).session_id,
-  );
+  const params = await searchParams;
+  const sessionId = checkoutSessionIdSchema.safeParse(params.session_id);
+  const token = downloadTokenSchema.safeParse(params.token);
   const order = sessionId.success
     ? await confirmCheckout(sessionId.data)
     : null;
@@ -52,7 +57,19 @@ export default async function CheckoutSuccessPage({
     );
   }
 
-  // PAID or REFUNDED
+  // PAID or REFUNDED. The raw token is used only in the links below, and
+  // only once it's known to be this order's.
+  const downloadToken =
+    order.status === "PAID" &&
+    token.success &&
+    tokenMatches(
+      token.data,
+      order.downloadTokenHash,
+      order.downloadTokenExpiresAt,
+    )
+      ? token.data
+      : null;
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       {order.status === "PAID" && <ClearCart />}
@@ -84,6 +101,31 @@ export default async function CheckoutSuccessPage({
                 Another buyer got this exclusive just before your payment went
                 through. This item is refunded in full.
               </p>
+            ) : downloadToken ? (
+              <ul className="flex flex-col gap-2 pt-1">
+                {item.downloads.map((download) => (
+                  <li
+                    key={download.fileType}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    {/* A plain <a>, not <Link>: Next can prefetch a Link,
+                        and fetching this URL counts as a download. */}
+                    <a
+                      href={`/api/download/${item.id}/${download.fileType}?token=${downloadToken}`}
+                      className={buttonVariants({
+                        variant: "outline",
+                        size: "sm",
+                      })}
+                    >
+                      Download {fileNames[download.fileType]}
+                    </a>
+                    <span className="text-sm text-muted-foreground">
+                      {Math.max(download.maxCount - download.count, 0)} of{" "}
+                      {download.maxCount} downloads left
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Files:{" "}
@@ -101,11 +143,23 @@ export default async function CheckoutSuccessPage({
         <span>{formatPrice(order.totalCents)}</span>
       </div>
 
-      {/* Phase 6 adds the download buttons and the guest download link. */}
-      {order.status === "PAID" && (
+      {downloadToken && order.downloadTokenExpiresAt ? (
         <p className="text-sm text-muted-foreground">
-          Download buttons for these files arrive in the next update.
+          Bookmark this page: it&apos;s your download link until{" "}
+          {order.downloadTokenExpiresAt.toLocaleDateString("en-US", {
+            dateStyle: "long",
+            timeZone: "UTC",
+          })}
+          . Keep it private, because anyone with the link can download your
+          files.
         </p>
+      ) : (
+        order.status === "PAID" && (
+          <p className="text-sm text-muted-foreground">
+            This download link is incomplete or has expired. Please contact
+            support for a new one.
+          </p>
+        )
       )}
     </div>
   );

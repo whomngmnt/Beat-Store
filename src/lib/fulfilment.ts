@@ -265,6 +265,8 @@ export async function confirmCheckout(sessionId: string) {
       email: true,
       totalCents: true,
       reviewNote: true,
+      downloadTokenHash: true,
+      downloadTokenExpiresAt: true,
       items: {
         select: {
           id: true,
@@ -273,7 +275,7 @@ export async function confirmCheckout(sessionId: string) {
           priceCents: true,
           refundNeeded: true,
           downloads: {
-            select: { fileType: true },
+            select: { fileType: true, count: true, maxCount: true },
             orderBy: { fileType: "asc" },
           },
         },

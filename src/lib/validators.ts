@@ -71,3 +71,13 @@ export const checkoutSessionIdSchema = z
   .string()
   .max(255)
   .regex(/^cs_test_[A-Za-z0-9]+$/);
+
+// A guest download token from a URL (src/lib/tokens.ts): 32 bytes as
+// base64url are always 43 characters from this alphabet.
+export const downloadTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+// The [orderItemId] and [fileType] in /api/download/[orderItemId]/[fileType].
+export const downloadParamsSchema = z.object({
+  orderItemId: z.uuid(),
+  fileType: z.enum(["MP3", "WAV", "STEMS"]),
+});

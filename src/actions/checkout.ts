@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { cartTotalCents } from "@/lib/pricing";
 import { releaseReservations, reserveExclusive } from "@/lib/reservation";
 import { getStripe } from "@/lib/stripe";
+import { createDownloadToken } from "@/lib/tokens";
 import { cartItemsSchema } from "@/lib/validators";
 import type { LicenseCode } from "@/generated/prisma/client";
 
@@ -61,6 +62,12 @@ export async function createCheckoutSession(
   }
   const totalCents = cartTotalCents(buyable.map((line) => line.priceCents));
 
+  // The guest download token (PLAN.md §5.1). Only its hash goes in the
+  // database. The raw token goes in the success page URL below, which is
+  // the buyer's download link. It's made before payment, but the download
+  // route serves PAID orders only.
+  const download = createDownloadToken();
+
   // Step 3: one transaction creates the PENDING order and holds every
   // exclusive. If one is taken, the throw rolls back the order too.
   let orderId: string;
@@ -69,6 +76,8 @@ export async function createCheckoutSession(
       const order = await tx.order.create({
         data: {
           totalCents,
+          downloadTokenHash: download.hash,
+          downloadTokenExpiresAt: download.expiresAt,
           // Snapshots, so later edits to a beat or tier don't change the order.
           items: {
             create: buyable.map((line) => ({
@@ -123,7 +132,8 @@ export async function createCheckoutSession(
         })),
         metadata: { orderId },
         expires_at: Math.floor(Date.now() / 1000) + SESSION_MINUTES * 60,
-        success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        // base64url needs no escaping in a URL.
+        success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}&token=${download.token}`,
         cancel_url: `${siteUrl}/checkout/cancel`,
       },
       { idempotencyKey: `checkout-${orderId}` },

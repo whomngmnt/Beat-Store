@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCheckoutSession } from "../../src/actions/checkout";
 import { db } from "../../src/lib/db";
+import { hashToken } from "../../src/lib/tokens";
 import { createTestBeat, deleteTestBeat, fakeStripeId } from "./fixtures";
 
 const { createSession } = vi.hoisted(() => ({ createSession: vi.fn() }));
@@ -40,11 +41,17 @@ describe("createCheckoutSession", () => {
     );
 
     const winners = results.filter((result) => "url" in result);
-    const taken = results.filter(
-      (result) => "error" in result && result.error.includes("just taken"),
+    // A loser that read the cart before the winner committed fails the
+    // reservation ("just taken"). One that read it after sees a RESERVED
+    // beat and is refused earlier ("can't be bought right now"). Which one
+    // depends on timing; both are correct refusals.
+    const refused = results.filter(
+      (result) =>
+        "error" in result &&
+        /just taken|can't be bought right now/.test(result.error),
     );
     expect(winners).toHaveLength(1);
-    expect(taken).toHaveLength(19);
+    expect(refused).toHaveLength(19);
     expect(createSession).toHaveBeenCalledTimes(1);
 
     // The 19 losers rolled back, so only the winner's order exists, and it
@@ -83,6 +90,26 @@ describe("createCheckoutSession", () => {
       where: { id: beat.beatId },
     });
     expect(saved.status).toBe("PUBLISHED");
+  });
+
+  it("stores only the token's hash and puts the raw token in the success URL", async () => {
+    await createCheckoutSession([beat.cartItem("BASIC")]);
+
+    const [order] = await ordersForBeat();
+    const successUrl = new URL(createSession.mock.calls[0][0].success_url);
+    const token = successUrl.searchParams.get("token")!;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // Stripe fills in the session id when it sends the buyer back.
+    expect(successUrl.searchParams.get("session_id")).toBe(
+      "{CHECKOUT_SESSION_ID}",
+    );
+    expect(order.downloadTokenHash).toBe(hashToken(token));
+    expect(order.downloadTokenHash).not.toContain(token);
+    const days =
+      (order.downloadTokenExpiresAt!.getTime() - Date.now()) /
+      (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(29.99);
+    expect(days).toBeLessThanOrEqual(30);
   });
 
   it("frees the exclusive and marks the order FAILED when Stripe fails", async () => {

@@ -6,6 +6,8 @@ import {
   cartItemsSchema,
   catalogSearchSchema,
   checkoutSessionIdSchema,
+  downloadParamsSchema,
+  downloadTokenSchema,
 } from "../../src/lib/validators";
 
 describe("catalogSearchSchema", () => {
@@ -163,5 +165,42 @@ describe("checkoutSessionIdSchema", () => {
     ["nothing", undefined],
   ])("rejects %s", (_label, value) => {
     expect(checkoutSessionIdSchema.safeParse(value).success).toBe(false);
+  });
+});
+
+describe("downloadTokenSchema", () => {
+  it("accepts 43 base64url characters", () => {
+    const token = "aB3_-".repeat(8) + "xyz";
+    expect(downloadTokenSchema.safeParse(token).success).toBe(true);
+  });
+
+  it.each([
+    ["a token one character short", "a".repeat(42)],
+    ["a token one character long", "a".repeat(44)],
+    ["base64 padding or +/", "a".repeat(41) + "+/"],
+    ["SQL", "' OR '1'='1" + "a".repeat(32)],
+    ["an array", ["a".repeat(43), "b".repeat(43)]],
+    ["nothing", undefined],
+  ])("rejects %s", (_label, value) => {
+    expect(downloadTokenSchema.safeParse(value).success).toBe(false);
+  });
+});
+
+describe("downloadParamsSchema", () => {
+  const orderItemId = "7f9c2ba4-e88f-41d1-8d3b-0d4a1c0e6f53";
+
+  it.each(["MP3", "WAV", "STEMS"])("accepts the %s file type", (fileType) => {
+    expect(
+      downloadParamsSchema.safeParse({ orderItemId, fileType }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["an id that isn't a UUID", { orderItemId: "1", fileType: "MP3" }],
+    ["a lowercase file type", { orderItemId, fileType: "mp3" }],
+    ["another file type", { orderItemId, fileType: "LICENSE" }],
+    ["a path", { orderItemId, fileType: "../../.env" }],
+  ])("rejects %s", (_label, params) => {
+    expect(downloadParamsSchema.safeParse(params).success).toBe(false);
   });
 });

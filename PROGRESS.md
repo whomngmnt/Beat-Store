@@ -4,17 +4,27 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 5 (Stripe checkout) code is committed (`aa610f2`) and pushed to `origin/develop`. 7 of the 10 PLAN.md §8 Phase 5 boxes are ticked. The other 3 are the user's (accounts, Stripe CLI install and `stripe login`, a run with `stripe listen`). Nothing has been paid through real Stripe yet: `.env` has no Stripe test key.
-- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request.
-- **Next step:** the user makes a Stripe test account, puts the keys in `.env`, installs the Stripe CLI and runs the manual checkout checklist in the 2026-11-11 log entry. The R2, Neon and Google OAuth accounts are also still to make (check Neon's time zone then). After that, Phase 6: delivery (the guest download link decision comes first).
+- **Stage:** Phase 6 (delivery) is built and tested, not committed yet. 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. All 7 Phase 5 checklist steps against real Stripe have now passed, and the Phase 5 local-testing box is ticked. Only the Phase 5 accounts box is open (R2, Neon, Google).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. `b8d360f` is committed but not pushed yet.
+- **Next step:** a real file download from storage hasn't been tested yet. The user chose a local S3-compatible server in Docker over creating R2 now. Claude plans it, and builds it after the user's OK. Then Phase 7: auth & account.
 
 ## Open questions
 
+- **No real file download yet.**
+  - **Tested:** the route's redirect is covered with fake S3 settings (signing works offline), and the browser test went up to the "file isn't available yet" 404.
+  - **Not tested:** that R2 accepts the signed link and serves the file. Demo beats have no full files, and `.env` has no `S3_*` values.
+  - **Chosen:** a local S3-compatible server in Docker. The plan waits for the user's OK. R2 itself still has to be set up before deploying (Phase 10).
+- **The raw guest token is stored at Stripe.** It's part of the Checkout Session's `success_url`, so anyone with access to the Stripe account can see it. This was accepted when choosing option A.
+- **Stripe feedback not sent.** The user approved sending feedback about `stripe listen` needing `--events`. Claude Code's auto mode blocked the command as an external write. The user can run it with `!` if they still want it sent.
 - **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. After reading the summary, which listed the timing change and the new fields below, the user asked to commit and push. So both are in `aa610f2`, and either can still change if the user says so.
 - **Timing change from PLAN.md (committed).** Stripe refuses a session that expires less than 30 minutes after it creates it, so "now + 30 min" counted on our server can fail. The session now lasts 31 minutes and the exclusive hold 35, so the hold can't run out while the buyer can still pay. PLAN.md §5.2 and §5.4, `exclusives.md` and `stripe-checkout.md` were changed to match.
 - **New schema fields (committed).** `Order.reviewNote` (a payment that doesn't match the order) and `OrderItem.refundNeeded` / `refundedAt` (the lost-exclusive refund the cron job retries). PLAN.md §5.2 needs both, but §4 didn't have them. Migration `20261111065236_phase5_review_and_refund`.
 - **Cancel blocks your own exclusive.** If a buyer cancels on Stripe's page, their exclusive stays held until the session expires (up to 31 min), so they can't check it out again until then. A possible fix: put the order id in the cancel URL and have the cancel page expire the Stripe session. Not built: the decision is the user's.
 - **An expired hold looks reserved until it's freed.** The cart blocks the exclusive of any RESERVED beat, even when `reservedUntil` has passed, until the `checkout.session.expired` webhook or the cron job frees it. The reservation SQL's "take over an expired hold" branch is then only a safety net.
+  - **Seen for real on 2026-11-13:** Dusty Crates stayed RESERVED for about 22 hours after its hold ran out. `stripe listen` wasn't running when Stripe sent the expired event, and the CLI doesn't replay missed events. Nothing runs the cron locally either. Resending the event freed it.
+  - **In production** Stripe retries webhooks and the cron runs, so this gap is local only.
+- **`stripe listen` now needs `--events`.** Stripe CLI 1.55.11 refuses `stripe listen --forward-to …` on its own ("must specify events to forward using --events, --all-snapshot, or --all-thin"). PLAN.md §8 now shows the working command. `CLAUDE.md` (Commands) and the comment at the top of `src/app/api/webhooks/stripe/route.ts` still show the old one. They're waiting for the user's OK.
+- **`CRON_SECRET` isn't in `.env`.** Both cron routes return 401 locally until it's set. `.env.example` already has the placeholder. It wasn't added because `.env` is the user's file.
 - **Vercel Cron limits (Phase 10).** The plan runs the cron routes every 5 minutes. Check Vercel's current plan limits when deploying: the Hobby plan has allowed only daily cron jobs. No `vercel.json` yet: deploying is Phase 10.
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
@@ -22,12 +32,110 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 Recorded 2026-11-07. The user said not to change any code for these now.
 
-- **Guest download link (Phase 6, still open).** Phase 5 shows each item's files on the success page but no download buttons yet. Only the SHA-256 hash of the guest token is stored, but the success page has to show the raw link. Decide when the token is created so the success page can show it.
+- **Guest download link (Phase 6): decided 2026-11-13, option A.** The token is made at checkout. Its hash goes on the order, and the raw token goes in Stripe's `success_url`, so the success page is the bookmarkable download link.
 - **Guest email (Phase 5): done with the default.** Fulfilment saves the email the buyer typed in Stripe Checkout (`customer_details.email`) on the order.
 - **Admin sign-in (Phase 7).** The seed creates the admin `User` from `ADMIN_EMAIL` with `emailVerified: false` and no Google account linked. When Better Auth arrives, check that signing in with Google under that email links to this existing user instead of failing or creating a second one.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-13: Phase 6: delivery (not committed yet)
+
+The plan was OK'd by the user:
+- **Token:** option A.
+- **Dependencies:** the two AWS SDK packages.
+- **Admin box:** stays in Phase 6.
+
+The user said they won't do manual testing, so Claude ran every check, including the browser ones.
+
+- **Dependencies:** `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` 3.1167.0. The peer warnings pnpm prints are the old eslint ones.
+- **`src/lib/tokens.ts`:**
+  - `createDownloadToken()`: 32 random bytes as base64url, their SHA-256 hash, and an expiry 30 days out.
+  - `tokenMatches()`: compares hashes with `timingSafeEqual` and refuses an expired token or an order without one.
+- **`src/lib/storage.ts`:** a lazy S3 client (like `getStripe()`) and `signDownloadUrl(key, filename)`.
+  - A 10-minute GET link with `attachment; filename=…`.
+  - No checksum options, matching Cloudflare's current R2 example.
+  - The SDK puts the bucket in the host name (`beatstore-files.<account>.r2…`).
+- **`src/lib/validators.ts`:** `downloadTokenSchema` (43 base64url characters) and `downloadParamsSchema` (UUID, `MP3|WAV|STEMS`).
+- **`src/actions/checkout.ts`:** makes the token before the order transaction, saves its hash and expiry on the order, and puts `&token=<raw>` in `success_url`.
+- **`src/app/api/download/[orderItemId]/[fileType]/route.ts`:**
+  1. **Params:** bad ones give 404.
+  2. **Token:** must match the item's order and not be expired, otherwise 403. An unknown item gets the same 403.
+  3. **Order:** must be PAID and not a refunded lost exclusive, otherwise 403.
+  4. **File:** must be in the license and uploaded, otherwise 404, and no download is used up.
+  5. **Signing:** the link is signed before counting.
+  6. **Count:** one `$executeRaw` UPDATE `… WHERE count < "maxCount"`. If 0 rows change, 429.
+  7. **Redirect:** 302 to the signed link with `Cache-Control: no-store`.
+  - **Why `$executeRaw`:** the plan's exact SQL, as in `reservation.ts`, rather than Prisma `updateMany`, which might run a SELECT and then an UPDATE.
+  - **Why sign first:** the browser test showed that a signing failure after counting cost the buyer a download.
+- **`src/lib/downloads.ts`** (admin box):
+  - `resetDownloadCount(downloadId)` and `reissueDownloadToken(orderId)`. The second returns the new success-page link and turns the old one off.
+  - Plain server functions, not server actions: an action is a public endpoint, and `requireAdmin()` doesn't exist until Phase 7.
+- **Success page:**
+  - Reads `token`, and shows the buttons only if `tokenMatches()` for this order.
+  - Each file gets a "Download" `<a>` and "N of 5 downloads left". A plain `<a>`, not `<Link>`, because a prefetch would count as a download.
+  - A bookmark note with the expiry date.
+  - Without a valid token: "This download link is incomplete or has expired. Please contact support."
+- **`confirmCheckout`** also returns the token hash, its expiry and each download's count.
+- **Tests:**
+  - **Unit:** 136 tests (+25): `tokens.test.ts` (8), `storage.test.ts` (3), validators (+14).
+  - **Integration:** 39 tests (+19). `download.test.ts` has 18:
+    - 302 to a 10-minute link, with the count +1 and `lastAt` set.
+    - A missing, malformed or wrong token, someone else's order's token, an expired token and an unknown item all give 403.
+    - REFUNDED, PENDING, EXPIRED and a lost exclusive give 403.
+    - A file not in the license gives 404, and a file not uploaded gives 404 with the count unchanged.
+    - A signing failure throws, with the count unchanged.
+    - Bad params give 404.
+    - The 6th download gives 429, while other files keep their own limit.
+    - 5 simultaneous requests at count 4 give exactly one 302.
+    - Reset and reissue work.
+  - **`checkout.test.ts`:** +1 test (the stored hash matches the token in `success_url`, expiry 30 days).
+  - **Fixed a timing-dependent Phase 5 test.** In "1 of 20 concurrent checkouts", a loser that reads the cart after the winner commits is refused with "can't be bought right now" instead of "just taken". It failed once in a full run, so it now accepts either refusal. The invariants (1 reservation, 1 order, 1 Stripe call) are unchanged. It passed 3 full runs in a row.
+  - **Static checks:** typecheck, lint and Prettier pass.
+- **Browser test, real Stripe test mode, Chrome:**
+  - **Step 3** (Glass Heart Premium, card `4000 0000 0000 9995`): "insufficient funds". The order stayed PENDING with 0 downloads and no completed event, and already had its token hash and a 13 Dec expiry.
+  - **Step 4** (same session, card `4000 0025 0000 3155`): the 3-D Secure popup, then Complete.
+    - **Webhook:** 200.
+    - **Order:** PAID, 4,999 cents.
+    - **Success page:** "Download MP3" and "Download WAV", 5 of 5 left each, and the bookmark note dated December 13, 2026.
+  - **Download MP3 click:** 404 "This file isn't available yet" (demo beats have no full files). The count stayed 0.
+  - **Without a token or with a wrong one:** the success page shows no buttons and the "incomplete or has expired" note. The route gives 403.
+  - **Step 6** (First Light Basic): Stripe's back arrow leads to `/checkout/cancel`, "Nothing was charged. Your cart is still saved.", with the cart badge at 1.
+  - **The earlier paid order emptied the cart** (`ClearCart`).
+- **Also changed:** `CLAUDE.md` Commands and the webhook route's comment now use `stripe listen --events …`.
+- **PLAN.md:**
+  - §8 Phase 6 boxes 1–4 ticked, with notes. The admin box is unticked, with a note.
+  - §6 lists `downloads.ts` and the new tests, and `signUrl()` is renamed to `signDownloadUrl()`.
+  - Phase 5's local-testing box is ticked. The stray `1.` someone typed at the start of that line was removed after the user confirmed it was an accident.
+
+### 2026-11-13: Phase 5 local testing against real Stripe (test mode)
+
+No app code changed in this task.
+
+- **Commit `b8d360f`** (reviewed by the user, not pushed yet):
+  - The beat page's cover square gets `self-start`, so it no longer squeezes the license column.
+  - The PLAN.md "Install the Stripe CLI" box is ticked.
+- **Setup:**
+  - Stripe CLI 1.55.11 is logged in. `.env` has the test keys.
+  - `STRIPE_WEBHOOK_SECRET` matches `stripe listen --print-secret`.
+  - Docker Desktop was started, and the migrations are up to date.
+- **The working listener command:** `stripe listen --events checkout.session.completed,checkout.session.expired,charge.refunded --forward-to localhost:3000/api/webhooks/stripe`. The old command without `--events` exits with an error (see Open questions).
+- **Leftover from the user's 2026-11-12 run:**
+  - Order `0086ca4d…` ($499 Exclusive for Dusty Crates) was still PENDING, and the beat was still RESERVED, though the hold had run out the day before.
+  - `stripe events resend` for its `checkout.session.expired` event gave a webhook 200. The order became EXPIRED and the beat PUBLISHED.
+- **Step 2** (card `4242…`, Exclusive for Paper Lanterns + Basic for Glass Heart). Order `cdf3d531…`:
+  - **Order:** PAID. 52,899 cents, which equals the sum of the items. No `reviewNote`.
+  - **Webhook:** arrived about 1 s after payment and answered 200 in 149 ms. One `WebhookEvent` row.
+  - **Paper Lanterns:** SOLD and held by this order. It's gone from `/beats`, and its page shows a "Sold" badge with no preview and no Add to cart.
+  - **Glass Heart:** stays PUBLISHED.
+  - **Downloads:** Exclusive MP3, WAV and STEMS, each 0/5. Basic MP3 0/5.
+- **Step 5:** resending the same completed event gave 200 and changed nothing (4 downloads, 3 webhook events, still PAID).
+- **Step 7:** already passed on 2026-11-12. Order `cda9a7ba…` is REFUNDED through `charge.refunded`.
+- **Not run yet:** step 3 (declined card), step 4 (3-D Secure) and step 6 (back button to `/checkout/cancel`).
+- **Dev server log:** no errors. The first webhook took 6 s because `pnpm dev` compiles a route on its first request.
+- **PLAN.md §8:**
+  - The accounts box notes that Stripe is done.
+  - The local-testing box shows the `--events` command. It stays unticked until steps 3, 4 and 6 pass.
 
 ### 2026-11-11: Phase 5: Stripe checkout (commit `aa610f2`)
 
