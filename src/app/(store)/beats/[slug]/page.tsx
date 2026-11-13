@@ -64,8 +64,10 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
     <div className="flex flex-col gap-10">
       <div className="grid gap-8 md:grid-cols-[2fr_3fr]">
         {/* Cover art comes with admin uploads (Phase 8). Until then every beat
-            gets this placeholder, as on BeatCard. */}
-        <div className="relative flex aspect-square items-center justify-center rounded-xl bg-muted">
+            gets this placeholder, as on BeatCard. self-start: if the square
+            stretched to the row's height, its width would follow and squeeze
+            the license column until it spilled over the table below. */}
+        <div className="relative flex aspect-square items-center justify-center self-start rounded-xl bg-muted">
           <AudioLines className="size-16 text-muted-foreground" aria-hidden />
           {beat.status !== "PUBLISHED" && (
             <span

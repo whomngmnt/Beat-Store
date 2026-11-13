@@ -353,7 +353,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [x] Handle `checkout.session.expired` and `charge.refunded`; cron routes for retrying fulfilment and releasing reservations
 - [x] Success page runs fulfilment itself if the webhook is late and always shows the downloads; cancel page
 - [x] Concurrency test: 20 parallel checkouts for one exclusive → exactly 1 reservation
-- [ ] Install the Stripe CLI and run `stripe login`
+- [x] Install the Stripe CLI and run `stripe login` (or give it the test key with `STRIPE_API_KEY`)
 - [ ] Local testing: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 
 ### Phase 6: Delivery (days 17–19)
