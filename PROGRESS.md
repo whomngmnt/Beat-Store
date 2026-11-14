@@ -4,16 +4,16 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 6 (delivery) is built and tested, not committed yet. 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. All 7 Phase 5 checklist steps against real Stripe have now passed, and the Phase 5 local-testing box is ticked. Only the Phase 5 accounts box is open (R2, Neon, Google).
-- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. `b8d360f` is committed but not pushed yet.
-- **Next step:** a real file download from storage hasn't been tested yet. The user chose a local S3-compatible server in Docker over creating R2 now. Claude plans it, and builds it after the user's OK. Then Phase 7: auth & account.
+- **Stage:** Phase 6 (delivery) is committed and pushed (`25785a7`). 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. All 7 Phase 5 checklist steps against real Stripe have passed. Only the Phase 5 accounts box is open (R2, Neon, Google).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to `25785a7` (Phase 6) is pushed to `origin/develop`.
+- **Next step:** a real file download from storage hasn't been tested yet. Claude has planned a local S3 server in Docker (SeaweedFS) and a script that uploads the demo beats' full files (see the 2026-11-14 log entry). It's built after the user's OK. Then Phase 7: auth & account.
 
 ## Open questions
 
 - **No real file download yet.**
   - **Tested:** the route's redirect is covered with fake S3 settings (signing works offline), and the browser test went up to the "file isn't available yet" 404.
   - **Not tested:** that R2 accepts the signed link and serves the file. Demo beats have no full files, and `.env` has no `S3_*` values.
-  - **Chosen:** a local S3-compatible server in Docker. The plan waits for the user's OK. R2 itself still has to be set up before deploying (Phase 10).
+  - **Chosen:** a local S3-compatible server in Docker. Claude proposes SeaweedFS. The plan waits for the user's OK. R2 itself still has to be set up before deploying (Phase 10).
 - **The raw guest token is stored at Stripe.** It's part of the Checkout Session's `success_url`, so anyone with access to the Stripe account can see it. This was accepted when choosing option A.
 - **Stripe feedback not sent.** The user approved sending feedback about `stripe listen` needing `--events`. Claude Code's auto mode blocked the command as an external write. The user can run it with `!` if they still want it sent.
 - **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. After reading the summary, which listed the timing change and the new fields below, the user asked to commit and push. So both are in `aa610f2`, and either can still change if the user says so.
@@ -23,7 +23,6 @@ Claude updates this file at the end of each task. Newest entries go first in the
 - **An expired hold looks reserved until it's freed.** The cart blocks the exclusive of any RESERVED beat, even when `reservedUntil` has passed, until the `checkout.session.expired` webhook or the cron job frees it. The reservation SQL's "take over an expired hold" branch is then only a safety net.
   - **Seen for real on 2026-11-13:** Dusty Crates stayed RESERVED for about 22 hours after its hold ran out. `stripe listen` wasn't running when Stripe sent the expired event, and the CLI doesn't replay missed events. Nothing runs the cron locally either. Resending the event freed it.
   - **In production** Stripe retries webhooks and the cron runs, so this gap is local only.
-- **`stripe listen` now needs `--events`.** Stripe CLI 1.55.11 refuses `stripe listen --forward-to …` on its own ("must specify events to forward using --events, --all-snapshot, or --all-thin"). PLAN.md §8 now shows the working command. `CLAUDE.md` (Commands) and the comment at the top of `src/app/api/webhooks/stripe/route.ts` still show the old one. They're waiting for the user's OK.
 - **`CRON_SECRET` isn't in `.env`.** Both cron routes return 401 locally until it's set. `.env.example` already has the placeholder. It wasn't added because `.env` is the user's file.
 - **Vercel Cron limits (Phase 10).** The plan runs the cron routes every 5 minutes. Check Vercel's current plan limits when deploying: the Hobby plan has allowed only daily cron jobs. No `vercel.json` yet: deploying is Phase 10.
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
@@ -39,7 +38,21 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-13: Phase 6: delivery (not committed yet)
+### 2026-11-14: PROGRESS.md cleanup, and the plan for local storage
+
+- **PROGRESS.md was out of date.** Fixed:
+  - **Current status:** it said Phase 6 wasn't committed, but it's in `25785a7` and pushed.
+  - **Open questions:** removed the `stripe listen --events` item. `CLAUDE.md` and the webhook route comment were fixed in `20de8cb`.
+  - **Log:** the Phase 6 heading now names its commits, and `b8d360f` is marked as pushed.
+  - **Up next:** it still listed the Phase 3 browser check and Phase 4. It now lists the storage test and Phase 7.
+- **Researched for the storage plan** (docs checked 2026-11-14):
+  - **MinIO:** it stopped publishing free Docker images in October 2025, and its repository was archived in February 2026. Ruled out.
+  - **Adobe S3Mock 5.x:** one container, but its README says presigned URLs are "accepted but not validated (expiration, signature, HTTP verb not checked)". A test against it wouldn't show that our signed links work. Ruled out.
+  - **SeaweedFS `weed mini` (chosen):** one container (`chrislusf/seaweedfs`, S3 on port 8333). The `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars create a user, and `S3_BUCKET` creates the bucket on first start. Once credentials exist, every request must be signed. The latest release is 4.53 (2026-11-08).
+  - **Path-style links:** S3 servers on `localhost` need the bucket in the path (`localhost:8333/beatstore-files/…`), not in the host name. R2 accepts both styles.
+- **Status:** the plan waits for the user's OK. Nothing is built yet.
+
+### 2026-11-13: Phase 6: delivery (commits `20de8cb` and `25785a7`, pushed)
 
 The plan was OK'd by the user:
 - **Token:** option A.
@@ -112,7 +125,7 @@ The user said they won't do manual testing, so Claude ran every check, including
 
 No app code changed in this task.
 
-- **Commit `b8d360f`** (reviewed by the user, not pushed yet):
+- **Commit `b8d360f`** (reviewed by the user, pushed together with Phase 6):
   - The beat page's cover square gets `self-start`, so it no longer squeezes the license column.
   - The PLAN.md "Install the Stripe CLI" box is ticked.
 - **Setup:**
@@ -643,14 +656,6 @@ Decisions:
 
 ## Up next
 
-- [ ] Browser check of Phase 3:
-  - Play from a card, and the bar appears.
-  - The music keeps playing across pages.
-  - Next and previous follow the grid. Seek and volume work.
-  - The waveform draws, follows the bar, and a click on it seeks or starts the beat.
-  - `plays` goes up once after 10 s of listening.
-
-Phase 4: Cart (PLAN.md §8), plan first:
-
-- [ ] Zustand `cart` store persisted to localStorage; one tier per beat
-- [ ] `CartDrawer` plus `/cart` page; `lib/pricing.ts` (totals, bundle, coupon) with unit tests
+- [ ] Local S3 server in Docker, demo full files, and a real download test (plan in the 2026-11-14 log entry, waiting for the user's OK)
+- [ ] Phase 7: Auth & account (PLAN.md §8), plan first. Needs a Google OAuth client.
+- [ ] Phase 6 admin box: the reset and reissue buttons, once Phase 7 and the Phase 8 admin panel exist
