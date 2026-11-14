@@ -4,16 +4,13 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 6 (delivery) is committed and pushed (`25785a7`). 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. All 7 Phase 5 checklist steps against real Stripe have passed. Only the Phase 5 accounts box is open (R2, Neon, Google).
-- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to `25785a7` (Phase 6) is pushed to `origin/develop`.
-- **Next step:** a real file download from storage hasn't been tested yet. Claude has planned a local S3 server in Docker (SeaweedFS) and a script that uploads the demo beats' full files (see the 2026-11-14 log entry). It's built after the user's OK. Then Phase 7: auth & account.
+- **Stage:** Phase 6 (delivery) is committed and pushed (`25785a7`). 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. Local S3 storage is built, and a real download works end to end (not committed yet). The Phase 1 seed box is now ticked. Only the Phase 5 accounts box is open (R2, Neon, Google).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. `1956f62` (PROGRESS.md cleanup) is committed but not pushed. Everything before it is pushed.
+- **Next step:** the user reviews the local storage diff, then commit. Then Phase 7: auth & account, plan first.
 
 ## Open questions
 
-- **No real file download yet.**
-  - **Tested:** the route's redirect is covered with fake S3 settings (signing works offline), and the browser test went up to the "file isn't available yet" 404.
-  - **Not tested:** that R2 accepts the signed link and serves the file. Demo beats have no full files, and `.env` has no `S3_*` values.
-  - **Chosen:** a local S3-compatible server in Docker. Claude proposes SeaweedFS. The plan waits for the user's OK. R2 itself still has to be set up before deploying (Phase 10).
+- **Downloads work locally, but R2 hasn't been tried.** On 2026-11-14 a real test purchase downloaded real files from the local SeaweedFS server. R2 itself still has to be set up before deploying (Phase 10): create the bucket, put its `S3_*` values in the deployed env, upload a file and download it once. The links use path style there too.
 - **The raw guest token is stored at Stripe.** It's part of the Checkout Session's `success_url`, so anyone with access to the Stripe account can see it. This was accepted when choosing option A.
 - **Stripe feedback not sent.** The user approved sending feedback about `stripe listen` needing `--events`. Claude Code's auto mode blocked the command as an external write. The user can run it with `!` if they still want it sent.
 - **Phase 5 was built without the plan-first step.** The user asked to "implement every task from phase 5 and just tell how you did it", so there was no plan to OK. After reading the summary, which listed the timing change and the new fields below, the user asked to commit and push. So both are in `aa610f2`, and either can still change if the user says so.
@@ -38,6 +35,35 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
+### 2026-11-14: Local S3 storage and a real download (not committed yet)
+
+The user OK'd the plan below: SeaweedFS, Claude filling the local S3 values in `.env`, and ticking the seed box.
+
+- **`docker-compose.yml`:** a new `storage` service.
+  - `chrislusf/seaweedfs:4.53` runs `weed mini`, with S3 on port 8333 and an `s3data` volume.
+  - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (`local-dev-key` / `local-dev-secret`, local placeholders) create its only user, so every request must be signed.
+  - `S3_BUCKET` creates `beatstore-files` on the first start.
+- **`src/lib/storage.ts`:**
+  - `forcePathStyle: true`. Links are now `<endpoint>/<bucket>/<key>`. Before, the SDK put the bucket in the host name, which `localhost` can't serve. R2 accepts both forms.
+  - `getS3()` is exported for the script.
+- **`scripts/upload-demo-files.ts`** (`pnpm demo:upload`). For each beat with `audio-src/<slug>.wav`:
+  - It uploads the WAV, plus a full-length 320 kbps MP3 made with ffmpeg (no tag), under `uploads/<beatId>/<uuid>.<ext>`.
+  - It only fills empty keys, so a re-run uploads nothing.
+  - The key is saved after the upload succeeds.
+  - Stems are skipped.
+- **Tests:** the unit test (`storage.test.ts`) and the integration test (`download.test.ts`) now expect the bucket in the path.
+- **`.env.example`:** a comment with the local values. **`.env`:** Claude filled in the three empty values (`S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). `S3_REGION` and `S3_PRIVATE_BUCKET` were already set.
+- **Docs:**
+  - `CLAUDE.md`: Stack, plus the Commands entry for `docker compose up -d` and a new `pnpm demo:upload` line.
+  - PLAN.md: §5.1, §6, and the Phase 1 seed box ticked.
+- **Checks run:**
+  - **Storage:** an unsigned GET gives 403. The bucket was created on start.
+  - **Upload script:** the first run uploaded 24 files in 17 s (WAV 8.0 MB, MP3 3.6 MB each). The second run uploaded 0.
+  - **A link from `signDownloadUrl()`:** 200 with `Content-Disposition: attachment; filename="glass-heart.wav"`, and the bytes match the source WAV. With one changed signature character: 403. The same link used for a PUT: 403. A 1-second link used after 3 s: 403 AccessDenied.
+  - **Browser, real Stripe test mode:** First Light Basic and Glass Heart Premium, $79.98, card `4242`. The webhook gave 200, and the success page showed 3 Download buttons at 5 of 5. Download WAV and Download MP3 for Glass Heart each gave a 302 to the storage server. Chrome saved `glass-heart.wav` (identical to the source) and `glass-heart.mp3` (320 kbps, 95 s, the full beat). After a reload both read 4 of 5.
+  - **Static checks and tests:** lint, typecheck and Prettier pass. Unit: 136 pass. Integration: 39 pass.
+- **Left behind by the test:** a PAID test order (buyer `buyer@example.com`) in the local database, and the two downloaded files in the user's Downloads folder.
+
 ### 2026-11-14: PROGRESS.md cleanup, and the plan for local storage
 
 - **PROGRESS.md was out of date.** Fixed:
@@ -50,7 +76,7 @@ Recorded 2026-11-07. The user said not to change any code for these now.
   - **Adobe S3Mock 5.x:** one container, but its README says presigned URLs are "accepted but not validated (expiration, signature, HTTP verb not checked)". A test against it wouldn't show that our signed links work. Ruled out.
   - **SeaweedFS `weed mini` (chosen):** one container (`chrislusf/seaweedfs`, S3 on port 8333). The `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars create a user, and `S3_BUCKET` creates the bucket on first start. Once credentials exist, every request must be signed. The latest release is 4.53 (2026-11-08).
   - **Path-style links:** S3 servers on `localhost` need the bucket in the path (`localhost:8333/beatstore-files/…`), not in the host name. R2 accepts both styles.
-- **Status:** the plan waits for the user's OK. Nothing is built yet.
+- **Status:** committed as `1956f62`. The plan was OK'd and built the same day (entry above).
 
 ### 2026-11-13: Phase 6: delivery (commits `20de8cb` and `25785a7`, pushed)
 
@@ -656,6 +682,6 @@ Decisions:
 
 ## Up next
 
-- [ ] Local S3 server in Docker, demo full files, and a real download test (plan in the 2026-11-14 log entry, waiting for the user's OK)
+- [ ] Review and commit the local S3 storage work (2026-11-14 log entry)
 - [ ] Phase 7: Auth & account (PLAN.md §8), plan first. Needs a Google OAuth client.
 - [ ] Phase 6 admin box: the reset and reissue buttons, once Phase 7 and the Phase 8 admin panel exist

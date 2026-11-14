@@ -91,10 +91,10 @@ describe("GET /api/download/[orderItemId]/[fileType]", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const url = new URL(response.headers.get("location")!);
-    expect(url.hostname).toBe(
-      "beatstore-files.fake-account.r2.cloudflarestorage.com",
+    expect(url.hostname).toBe("fake-account.r2.cloudflarestorage.com");
+    expect(url.pathname).toBe(
+      `/beatstore-files/uploads/${beat.beatId}/full.wav`,
     );
-    expect(url.pathname).toBe(`/uploads/${beat.beatId}/full.wav`);
     expect(url.searchParams.get("X-Amz-Expires")).toBe("600");
     expect(url.searchParams.get("response-content-disposition")).toMatch(
       /^attachment; filename="test-[0-9a-f-]+\.wav"$/,

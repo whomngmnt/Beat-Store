@@ -18,8 +18,8 @@ export const DOWNLOAD_URL_SECONDS = 10 * 60;
 let client: S3Client | undefined;
 
 // Created on first use, like getStripe(): `next build` loads route modules
-// where the S3_* variables aren't set.
-function getS3(): S3Client {
+// where the S3_* variables aren't set. Exported for the demo upload script.
+export function getS3(): S3Client {
   if (client) return client;
 
   const { S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = process.env;
@@ -31,6 +31,10 @@ function getS3(): S3Client {
   client = new S3Client({
     region: process.env.S3_REGION || "auto", // R2 ignores it, the SDK needs it
     endpoint: S3_ENDPOINT,
+    // Bucket in the path (<endpoint>/<bucket>/<key>), not in the host name.
+    // The local storage server only understands this form, and R2 accepts
+    // both, so local and R2 links look the same.
+    forcePathStyle: true,
     credentials: {
       accessKeyId: S3_ACCESS_KEY_ID,
       secretAccessKey: S3_SECRET_ACCESS_KEY,

@@ -17,7 +17,8 @@
     "prepare": "husky",
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "make-preview": "tsx scripts/make-preview.ts"
+    "make-preview": "tsx scripts/make-preview.ts",
+    "demo:upload": "tsx scripts/upload-demo-files.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [

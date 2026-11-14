@@ -26,11 +26,9 @@ describe("signDownloadUrl", () => {
       await signDownloadUrl("uploads/beat-1/abc.wav", "paper-lanterns.wav"),
     );
 
-    // The SDK puts the bucket in the host name (virtual-hosted style).
-    expect(url.origin).toBe(
-      "https://beatstore-files.account123.r2.cloudflarestorage.com",
-    );
-    expect(url.pathname).toBe("/uploads/beat-1/abc.wav");
+    // The bucket is in the path (forcePathStyle), not in the host name.
+    expect(url.origin).toBe("https://account123.r2.cloudflarestorage.com");
+    expect(url.pathname).toBe("/beatstore-files/uploads/beat-1/abc.wav");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("600");
     expect(url.searchParams.get("X-Amz-Signature")).toMatch(/^[0-9a-f]{64}$/);
     // Only the host is signed, so a plain browser GET matches the signature.

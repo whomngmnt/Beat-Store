@@ -140,6 +140,7 @@ Key rules:
 - Upload the full WAV, then run `scripts/make-preview.ts` (ffmpeg): 128kbps MP3, optional 60–90s cut, and a voice tag ("producer tag") mixed in every ~20s.
 - **Preview** files sit in a public bucket/path behind a CDN. **Full** MP3/WAV/stems sit in a **private** bucket.
 - Until R2 exists (Phase 5), demo previews are generated into `public/previews/<slug>.mp3` from source files in `audio-src/` (both gitignored), and Next serves them. Their keys (`previews/<slug>.mp3`) stay the same when they move to the public bucket.
+- Locally, a SeaweedFS container from `docker-compose.yml` stands in for the private R2 bucket. `pnpm demo:upload` puts each demo beat's full WAV, plus a full-length 320 kbps MP3 made from it, under server-chosen keys (`uploads/<beatId>/<uuid>.<ext>`). The S3 client puts the bucket in the path (`<endpoint>/<bucket>/<key>`), which both SeaweedFS and R2 accept.
 - Downloads go through `GET /api/download/[orderItemId]/[fileType]`. That route:
   1. Authorizes the request: the signed-in owner of the order, **or** a guest `?token=` whose SHA-256 hash matches `Order.downloadTokenHash` (compared in constant time) and has not expired.
   2. Checks the order is PAID (not REFUNDED).
@@ -215,14 +216,15 @@ Claude-code-project/
 ├─ PLAN.md
 ├─ README.md
 ├─ .env.example
-├─ docker-compose.yml            # local Postgres
+├─ docker-compose.yml            # local Postgres + S3 storage (SeaweedFS)
 ├─ vitest.config.mts             # reads the @/ import alias from tsconfig.json
 ├─ prisma/
 │  ├─ schema.prisma
 │  ├─ migrations/
 │  └─ seed.ts                    # license tiers, admin, ~12 demo beats
 ├─ scripts/
-│  └─ make-preview.ts            # ffmpeg preview + tag
+│  ├─ make-preview.ts            # ffmpeg preview + tag
+│  └─ upload-demo-files.ts       # demo full MP3/WAV into the private bucket
 ├─ audio-src/                    # full-quality demo sources + tag.wav (gitignored)
 ├─ public/                       # logo, placeholder covers
 │  └─ previews/                  # generated demo previews (gitignored, until R2)
@@ -320,7 +322,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ### Phase 1: Database & seed (days 2–3)
 
 - [x] Write `schema.prisma` (section 4) and run `prisma migrate dev`
-- [ ] `seed.ts`: 4 license tiers, admin user, ~12 demo beats with royalty-free/own audio
+- [x] `seed.ts`: 4 license tiers, admin user, ~12 demo beats with royalty-free/own audio (previews from `pnpm make-preview`, full MP3/WAV from `pnpm demo:upload`; no covers or stems)
 - [x] `lib/db.ts` singleton
 
 ### Phase 2: Catalog & beat pages (days 4–7)
