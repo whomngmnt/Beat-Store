@@ -27,7 +27,15 @@ export default async function AccountPage() {
           <h1 className="text-3xl font-semibold">Your account</h1>
           <p className="text-muted-foreground">Signed in as {user.email}</p>
         </div>
-        <SignOutButton />
+        <div className="flex gap-2">
+          {/* Only a link: the admin pages check requireAdmin() themselves. */}
+          {user.role === "ADMIN" && (
+            <Link href="/admin" className={buttonVariants()}>
+              Admin panel
+            </Link>
+          )}
+          <SignOutButton />
+        </div>
       </div>
 
       {!user.emailVerified && (

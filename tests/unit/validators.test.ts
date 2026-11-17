@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { MAX_CART_ITEMS } from "../../src/lib/cart";
 import {
+  beatFormSchema,
   beatIdSchema,
   beatSlugSchema,
   cartItemsSchema,
   catalogSearchSchema,
   checkoutSessionIdSchema,
+  couponCodeSchema,
+  couponFormSchema,
   downloadParamsSchema,
   downloadTokenSchema,
+  licenseTierFormSchema,
 } from "../../src/lib/validators";
 
 describe("catalogSearchSchema", () => {
@@ -202,5 +206,133 @@ describe("downloadParamsSchema", () => {
     ["a path", { orderItemId, fileType: "../../.env" }],
   ])("rejects %s", (_label, params) => {
     expect(downloadParamsSchema.safeParse(params).success).toBe(false);
+  });
+});
+
+describe("beatFormSchema", () => {
+  const form = {
+    title: "Midnight Drive!",
+    slug: "",
+    description: "<script>alert(1)</script>",
+    bpm: "140",
+    musicalKey: "C minor",
+    genre: "Trap",
+    mood: "Dark",
+    tags: " trap, dark,, trap , 808 ",
+    featured: null,
+  };
+
+  it("makes the slug from the title and reads tags, BPM and the checkbox", () => {
+    const beat = beatFormSchema.parse({ ...form, featured: "on" });
+    expect(beat.slug).toBe("midnight-drive");
+    expect(beat.tags).toEqual(["trap", "dark", "808"]);
+    expect(beat.bpm).toBe(140);
+    expect(beat.featured).toBe(true);
+    // Plain text: kept exactly as typed. React escapes it when shown.
+    expect(beat.description).toBe("<script>alert(1)</script>");
+    expect(beatFormSchema.parse(form).featured).toBe(false);
+  });
+
+  it("refuses a bad slug, a missing title and an odd BPM", () => {
+    expect(
+      beatFormSchema.safeParse({ ...form, slug: "Bad Slug" }).success,
+    ).toBe(false);
+    expect(beatFormSchema.safeParse({ ...form, title: " " }).success).toBe(
+      false,
+    );
+    expect(beatFormSchema.safeParse({ ...form, bpm: "12" }).success).toBe(
+      false,
+    );
+    expect(beatFormSchema.safeParse({ ...form, bpm: "140.5" }).success).toBe(
+      false,
+    );
+    // A title with no letters or digits gives an empty slug.
+    expect(beatFormSchema.safeParse({ ...form, title: "!!!" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("licenseTierFormSchema", () => {
+  const form = {
+    tierId: "6f1c2a4e-8b3d-4e5f-9a7b-1c2d3e4f5a6b",
+    name: "Basic Lease",
+    description: "MP3, up to 5,000 streams",
+    defaultPrice: "29.99",
+    streamLimit: "5000",
+    videoLimit: "",
+    terms: "Non-exclusive.",
+  };
+
+  it("reads the price as cents and an empty limit as unlimited", () => {
+    const tier = licenseTierFormSchema.parse(form);
+    expect(tier.defaultPrice).toBe(2999);
+    expect(tier.streamLimit).toBe(5000);
+    expect(tier.videoLimit).toBeNull();
+  });
+
+  it("refuses a price under $0.50 and a limit that isn't a whole number", () => {
+    for (const change of [
+      { defaultPrice: "0.49" },
+      { defaultPrice: "free" },
+      { streamLimit: "0" },
+      { streamLimit: "2.5" },
+      { videoLimit: "lots" },
+      { terms: "" },
+    ]) {
+      expect(
+        licenseTierFormSchema.safeParse({ ...form, ...change }).success,
+      ).toBe(false);
+    }
+  });
+});
+
+describe("coupon schemas", () => {
+  it("store codes in capitals", () => {
+    expect(couponCodeSchema.parse(" summer15 ")).toBe("SUMMER15");
+    for (const bad of ["ab", "with space", "a".repeat(31), "<b>"]) {
+      expect(couponCodeSchema.safeParse(bad).success).toBe(false);
+    }
+  });
+
+  const form = { code: "save10", percentOff: "", amountOff: "", expiresOn: "" };
+
+  it("take exactly one of percent off and amount off", () => {
+    expect(couponFormSchema.parse({ ...form, percentOff: "15" })).toEqual({
+      code: "SAVE10",
+      percentOff: 15,
+      amountOffCents: null,
+      expiresAt: null,
+    });
+    expect(
+      couponFormSchema.parse({ ...form, amountOff: "4.99" }).amountOffCents,
+    ).toBe(499);
+    expect(couponFormSchema.safeParse(form).success).toBe(false);
+    expect(
+      couponFormSchema.safeParse({ ...form, percentOff: "10", amountOff: "5" })
+        .success,
+    ).toBe(false);
+    expect(
+      couponFormSchema.safeParse({ ...form, percentOff: "101" }).success,
+    ).toBe(false);
+    expect(
+      couponFormSchema.safeParse({ ...form, percentOff: "12.5" }).success,
+    ).toBe(false);
+  });
+
+  it("make the expiry date last to the end of that day in UTC", () => {
+    const coupon = couponFormSchema.parse({
+      ...form,
+      percentOff: "10",
+      expiresOn: "2026-12-31",
+    });
+    expect(coupon.expiresAt?.toISOString()).toBe("2026-12-31T23:59:59.999Z");
+    expect(
+      couponFormSchema.safeParse({
+        ...form,
+        percentOff: "10",
+        expiresOn: "31/12/2026",
+      }).success,
+    ).toBe(false);
   });
 });

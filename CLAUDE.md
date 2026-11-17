@@ -37,7 +37,8 @@ These are set up in Phase 0. If a script is missing, add it under exactly this n
 docker compose up -d                 # local Postgres and S3 storage
 pnpm prisma migrate dev              # apply migrations
 pnpm db:seed                         # license tiers, admin user, ~12 demo beats
-pnpm demo:upload                     # demo beats' full MP3/WAV into local storage
+pnpm storage:setup                   # buckets, CORS and public-read policy in local storage
+pnpm demo:upload                     # demo previews and full MP3/WAV into local storage
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test
 pnpm audit --audit-level=high

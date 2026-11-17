@@ -88,7 +88,7 @@ User          id, name, email (unique), emailVerified (boolean), image?, role (U
               ← Better Auth's core user fields plus role. Its Session, Account and
                 Verification tables are added in Phase 7.
 Beat          id, slug (unique), title, description (plain text, default ""), bpm, musicalKey,
-              genre, mood, tags[], coverUrl?, previewKey?, mp3Key?, wavKey?, stemsKey?,
+              genre, mood, tags[], coverKey?, previewKey?, mp3Key?, wavKey?, stemsKey?,
               status (DRAFT|PUBLISHED|RESERVED|SOLD), reservedByOrderId? (→ Order),
               reservedUntil?, plays, featured, createdAt
               ← file keys are empty until the admin uploads the files
@@ -140,7 +140,7 @@ Key rules:
 - Upload the full WAV, then run `scripts/make-preview.ts` (ffmpeg): 128kbps MP3, optional 60–90s cut, and a voice tag ("producer tag") mixed in every ~20s.
 - **Preview** files sit in a public bucket/path behind a CDN. **Full** MP3/WAV/stems sit in a **private** bucket.
 - Until R2 exists (Phase 5), demo previews are generated into `public/previews/<slug>.mp3` from source files in `audio-src/` (both gitignored), and Next serves them. Their keys (`previews/<slug>.mp3`) stay the same when they move to the public bucket.
-- Locally, a SeaweedFS container from `docker-compose.yml` stands in for the private R2 bucket. `pnpm demo:upload` puts each demo beat's full WAV, plus a full-length 320 kbps MP3 made from it, under server-chosen keys (`uploads/<beatId>/<uuid>.<ext>`). The S3 client puts the bucket in the path (`<endpoint>/<bucket>/<key>`), which both SeaweedFS and R2 accept.
+- Locally, a SeaweedFS container from `docker-compose.yml` stands in for both R2 buckets. `pnpm storage:setup` creates them, sets their CORS (5.5) and makes the public one readable. `pnpm demo:upload` puts each demo preview in the public bucket under its key, and each demo beat's full WAV, plus a full-length 320 kbps MP3 made from it, under server-chosen keys (`uploads/<beatId>/<uuid>.<ext>`). The S3 client puts the bucket in the path (`<endpoint>/<bucket>/<key>`), which both SeaweedFS and R2 accept.
 - Downloads go through `GET /api/download/[orderItemId]/[fileType]`. That route:
   1. Authorizes the request: the signed-in owner of the order, **or** a guest `?token=` whose SHA-256 hash matches `Order.downloadTokenHash` (compared in constant time) and has not expired.
   2. Checks the order is PAID (not REFUNDED).
@@ -205,6 +205,7 @@ WHERE id = $beatId
 
 - `/api/upload` (admin only) issues presigned PUT URLs only under a fixed key prefix such as `uploads/<beatId>/<uuid>.<ext>`. The server picks the key; the client never chooses it. Content-Type is restricted by an allowlist.
 - A presigned PUT **doesn't limit file size**. So after upload, before a beat can be published, the server runs a `HeadObject` to check size (cover ≤ 5 MB, MP3 ≤ 20 MB, WAV ≤ 200 MB, stems ZIP ≤ 1 GB) and **sniffs the magic bytes** (ID3/MPEG, RIFF/WAVE, PK zip, PNG/JPEG/WebP). Files that fail are deleted and publishing is blocked.
+- In practice the check runs as soon as an upload finishes (`attachBeatFile`), and only a file that passes gets its key saved on the beat. A beat can be published only when it has a preview and every file its active licenses include (`publishProblems()` in `lib/uploads.ts`). The upload link also signs the Content-Type, so the browser must send exactly the allowed type it asked for.
 - Bucket CORS allows only `NEXT_PUBLIC_SITE_URL` (and `http://localhost:3000` in dev), with methods PUT and GET only.
 
 ---
@@ -224,7 +225,8 @@ Claude-code-project/
 │  └─ seed.ts                    # license tiers, admin, ~12 demo beats
 ├─ scripts/
 │  ├─ make-preview.ts            # ffmpeg preview + tag
-│  └─ upload-demo-files.ts       # demo full MP3/WAV into the private bucket
+│  ├─ setup-storage.ts           # buckets, CORS, public-read policy (pnpm storage:setup)
+│  └─ upload-demo-files.ts       # demo previews (public bucket) and full MP3/WAV (private bucket)
 ├─ audio-src/                    # full-quality demo sources + tag.wav (gitignored)
 ├─ public/                       # logo, placeholder covers
 │  └─ previews/                  # generated demo previews (gitignored, until R2)
@@ -240,7 +242,9 @@ Claude-code-project/
 │  │  ├─ (store)/checkout/cancel/page.tsx
 │  │  ├─ (store)/account/page.tsx
 │  │  ├─ (store)/licenses|faq|contact|terms|privacy/page.tsx
-│  │  ├─ admin/(dashboard|beats|beats/new|beats/[id]|orders|coupons)/page.tsx
+│  │  ├─ admin/layout.tsx        # requireAdmin() + admin nav
+│  │  ├─ admin/page.tsx          # dashboard
+│  │  ├─ admin/(beats|beats/new|beats/[id]|orders|orders/[id]|licenses|coupons)/page.tsx
 │  │  ├─ api/webhooks/stripe/route.ts
 │  │  ├─ api/download/[orderItemId]/[fileType]/route.ts
 │  │  ├─ api/upload/route.ts     # presigned upload URLs for admin
@@ -253,13 +257,16 @@ Claude-code-project/
 │  │  ├─ player/PlayerBar.tsx, PlayButton.tsx, Waveform.tsx
 │  │  ├─ beats/BeatCard.tsx, BeatGrid.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
 │  │  ├─ cart/CartButton.tsx, CartDrawer.tsx, CartContents.tsx, CheckoutButton.tsx, ClearCart.tsx
+│  │  ├─ admin/                  # admin forms, labels, upload, CSS bar charts
 │  │  └─ ui/                     # shadcn components
 │  ├─ lib/
 │  │  ├─ db.ts                   # Prisma client singleton
 │  │  ├─ cart.ts                 # cart limit and type, browser check of the saved cart (no Zod)
 │  │  ├─ catalog.ts              # catalog queries: filters, search, sort, pagination; cart lines
 │  │  ├─ stripe.ts
-│  │  ├─ storage.ts              # previewUrl(); S3/R2 client, signDownloadUrl(), presignUpload()
+│  │  ├─ storage.ts              # publicUrl(); S3/R2 client, signDownloadUrl(), signUploadUrl(), fileSize(), firstBytes(), deleteFile()
+│  │  ├─ uploads.ts              # admin upload rules: keys, size limits, magic bytes, publishProblems()
+│  │  ├─ dashboard.ts            # admin dashboard numbers
 │  │  ├─ downloads.ts            # admin fixes: resetDownloadCount(), reissueDownloadToken()
 │  │  ├─ auth.ts
 │  │  ├─ auth-guards.ts          # requireUser(), requireAdmin(): called in every protected page/route/action
@@ -269,14 +276,14 @@ Claude-code-project/
 │  │  ├─ ratelimit.ts            # later slice (Upstash)
 │  │  ├─ email.ts                # later slice (Resend)
 │  │  ├─ license-pdf.tsx         # later slice (PDF)
-│  │  ├─ pricing.ts              # price display, cart total; coupon maths in Phase 8 (pure → unit-tested)
+│  │  ├─ pricing.ts              # price display, cart total, dollars↔cents, coupon maths (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
-│  ├─ actions/                   # server actions: cart.ts, checkout.ts, beats.ts, orders.ts, plays.ts
+│  ├─ actions/                   # server actions: cart.ts, checkout.ts, plays.ts; admin: beats.ts, orders.ts, licenses.ts, coupons.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
 │  ├─ unit/pricing.test.ts, validators.test.ts, fulfilment.test.ts, stripe.test.ts, tokens.test.ts, storage.test.ts, …
-│  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts, download.test.ts   # real Postgres: pnpm test:integration
+│  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts, download.test.ts, account.test.ts, admin-*.test.ts   # real Postgres: pnpm test:integration
 │  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts   # later slice (Playwright)
 └─ .github/workflows/ci.yml
 ```
@@ -375,16 +382,16 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 8: Admin panel (days 22–26)
 
-- [ ] Admin layout and route guard
-- [ ] Beat create/edit form (Zod), direct-to-R2 uploads via presigned PUT URLs with server-chosen keys under `uploads/<beatId>/`
-- [ ] Post-upload check (5.5): `HeadObject` size limit and magic-byte type sniffing; publishing is blocked until all files pass
-- [ ] R2 CORS: only the site origin (and localhost in dev), PUT/GET only
-- [ ] Descriptions are plain text: render as text (React escapes it), never `dangerouslySetInnerHTML`
-- [ ] License tier template editor and per-beat price overrides
-- [ ] Orders table and detail page, refund (Stripe API)
-- [ ] On the order detail page: reset a download count and reissue the guest token (moved from Phase 6; the functions and tests are already in `lib/downloads.ts`, and each action calls `requireAdmin()` first)
-- [ ] Dashboard stats and charts (revenue by day, top beats)
-- [ ] Coupons CRUD (optional), with the coupon maths in `lib/pricing.ts` (unit-tested) and a code field at checkout
+- [x] Admin layout and route guard
+- [x] Beat create/edit form (Zod), direct-to-R2 uploads via presigned PUT URLs with server-chosen keys under `uploads/<beatId>/`
+- [x] Post-upload check (5.5): `HeadObject` size limit and magic-byte type sniffing; publishing is blocked until all files pass
+- [x] R2 CORS: only the site origin (and localhost in dev), PUT/GET only
+- [x] Descriptions are plain text: render as text (React escapes it), never `dangerouslySetInnerHTML`
+- [x] License tier template editor and per-beat price overrides
+- [x] Orders table and detail page, refund (Stripe API)
+- [x] On the order detail page: reset a download count and reissue the guest token (moved from Phase 6; the functions and tests are already in `lib/downloads.ts`, and each action calls `requireAdmin()` first)
+- [x] Dashboard stats and charts (revenue by day, top beats)
+- [x] Coupons CRUD (optional), with the coupon maths in `lib/pricing.ts` (unit-tested) and a code field at checkout
 
 ### Phase 9: Polish (days 27–29)
 

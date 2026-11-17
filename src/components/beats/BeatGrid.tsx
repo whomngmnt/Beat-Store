@@ -1,6 +1,6 @@
 import { BeatCard } from "@/components/beats/BeatCard";
 import type { BeatCardData } from "@/lib/catalog";
-import { previewUrl } from "@/lib/storage";
+import { publicUrl } from "@/lib/storage";
 import type { Track } from "@/store/player";
 
 // A grid of beat cards. The grid is also the player queue: pressing play
@@ -14,7 +14,7 @@ export function BeatGrid({ beats }: { beats: BeatCardData[] }) {
             id: beat.id,
             slug: beat.slug,
             title: beat.title,
-            previewUrl: previewUrl(beat.previewKey),
+            previewUrl: publicUrl(beat.previewKey),
           },
         ]
       : [],

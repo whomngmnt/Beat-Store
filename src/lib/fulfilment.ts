@@ -264,6 +264,7 @@ export async function confirmCheckout(sessionId: string) {
       status: true,
       email: true,
       totalCents: true,
+      coupon: { select: { code: true } },
       reviewNote: true,
       downloadTokenHash: true,
       downloadTokenExpiresAt: true,

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { AudioLines } from "lucide-react";
 import { LicenseSelector } from "@/components/beats/LicenseSelector";
@@ -8,7 +9,7 @@ import { Waveform } from "@/components/player/Waveform";
 import { badgeVariants } from "@/components/ui/badge";
 import { getBeatBySlug } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
-import { previewUrl } from "@/lib/storage";
+import { publicUrl } from "@/lib/storage";
 import type { Track } from "@/store/player";
 
 // There's no generateStaticParams, so this page renders on every request:
@@ -56,19 +57,30 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
           id: beat.id,
           slug: beat.slug,
           title: beat.title,
-          previewUrl: previewUrl(beat.previewKey),
+          previewUrl: publicUrl(beat.previewKey),
         }
       : null;
 
   return (
     <div className="flex flex-col gap-10">
       <div className="grid gap-8 md:grid-cols-[2fr_3fr]">
-        {/* Cover art comes with admin uploads (Phase 8). Until then every beat
-            gets this placeholder, as on BeatCard. self-start: if the square
-            stretched to the row's height, its width would follow and squeeze
-            the license column until it spilled over the table below. */}
-        <div className="relative flex aspect-square items-center justify-center self-start rounded-xl bg-muted">
-          <AudioLines className="size-16 text-muted-foreground" aria-hidden />
+        {/* The uploaded cover, or a placeholder, as on BeatCard. self-start:
+            if the square stretched to the row's height, its width would
+            follow and squeeze the license column until it spilled over the
+            table below. */}
+        <div className="relative flex aspect-square items-center justify-center self-start overflow-hidden rounded-xl bg-muted">
+          {beat.coverKey ? (
+            // Not optimized yet: Phase 9 turns on next/image's resizing.
+            <Image
+              src={publicUrl(beat.coverKey)}
+              alt=""
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            <AudioLines className="size-16 text-muted-foreground" aria-hidden />
+          )}
           {beat.status !== "PUBLISHED" && (
             <span
               className={badgeVariants({ className: "absolute top-3 left-3" })}

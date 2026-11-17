@@ -92,6 +92,20 @@ export default async function CheckoutSuccessPage({
         token={downloadToken ?? undefined}
       />
 
+      {order.coupon && (
+        // The total is the items minus the coupon (createCheckoutSession).
+        <div className="flex justify-between border-t pt-3 text-sm text-muted-foreground">
+          <span>Coupon {order.coupon.code}</span>
+          <span>
+            −
+            {formatPrice(
+              order.items.reduce((sum, item) => sum + item.priceCents, 0) -
+                order.totalCents,
+            )}
+          </span>
+        </div>
+      )}
+
       <div className="flex justify-between border-t pt-3 font-medium">
         <span>Total paid</span>
         <span>{formatPrice(order.totalCents)}</span>

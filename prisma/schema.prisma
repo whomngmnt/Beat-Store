@@ -132,7 +132,7 @@ model Beat {
   genre       String
   mood        String
   tags        String[]
-  coverUrl    String?
+  coverKey    String? // storage key in the public bucket, like previewKey
   // Storage keys, not URLs. Empty until the admin uploads the files.
   previewKey  String?
   mp3Key      String?

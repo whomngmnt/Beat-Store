@@ -4,12 +4,27 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
-- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to `defa98a` (local storage) is pushed to `origin/develop`.
-- **Next step:** Phase 8: admin panel, plan first.
+- **Stage:** Phase 8 (admin panel) is built and every Phase 8 box is ticked. It is committed and pushed to `develop` (commit "Phase 8: admin panel, uploads, license tiers, dashboard and coupons"). Lint, typecheck, 169 unit tests and 79 integration tests pass. Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to the Phase 8 commit is pushed to `origin/develop`.
+- **Next step:** Phase 9: polish, plan first.
 
 ## Open questions
 
+- **Phase 8 admin pages not checked in a browser (user's choice, 2026-11-17).** The user said not to check them. They're covered by the integration tests only. Checked in the browser:
+  - the catalog, the beat page, and the cart with its new coupon field (a wrong code shows "This coupon code isn't valid")
+  - signed-out visits to `/admin/*` and `/api/upload` go to `/sign-in`
+
+  Never seen in a browser:
+  - each admin page
+  - a real cover and file upload
+  - publish and back to draft
+  - a price change
+  - a coupon, then a test checkout with it (Stripe's page should show the discount)
+- **Phase 8 was built without the plan-first step.** The user said "do phase 8" after the task list, so there was no plan to OK per task. Every decision is in the 2026-11-17 Phase 8 log entry below and can still change.
+- **Stripe test coupons pile up.** Each checkout with a discount creates its own one-off Stripe coupon (`max_redemptions: 1`). That keeps Stripe's total equal to ours to the cent, but the Stripe test account collects one coupon per discounted checkout. Fine for test mode; revisit if it gets noisy.
+- **Replaced uploads stay in storage.** Uploading a new file for a beat saves the new key and leaves the old object where it is. Download links always use the beat's current key, so nothing points at the old file, but deleting files can't be undone, so that's left for a decision (a clean-up job is a later idea).
+- **License terms aren't snapshotted.** `OrderItem` keeps the license name and price, but not the terms or limits. Editing a tier on `/admin/licenses` changes what new buyers read; no page shows terms for a past order. The license PDF slice will need a terms snapshot on the order item.
+- **`storage:setup` on R2 (Phase 10).** The script sets CORS on both buckets the same way on R2. R2 has no bucket policies: the public bucket is made public in the Cloudflare dashboard (r2.dev or a custom domain), and `PUBLIC_CDN_URL` points there. The script prints a warning about that.
 - **Signed-in re-download not tried in a browser.** On 2026-11-17 the user skipped the test payment, so the admin account has no paid order. Downloading from `/account` without a token is covered by integration tests only (`download.test.ts`). A PENDING test order (Glass Heart Premium, $49.99, owned by the admin) is left in the local database. Its Stripe session expires 31 minutes after it was made.
 - **Google sign-in is in Testing mode.** Only the test users listed in Google Cloud (project `beat-store-dev`, Google Auth Platform → Audience) can sign in. Right now that's the admin's Google account. Before real buyers sign in (Phase 10): publish the app, add the production redirect URI `https://<domain>/api/auth/callback/google`, and check Google's current rules for apps that ask only for `openid email profile`.
 - **Better Auth is pinned to 1.7.22.** The 2026-11-14 plan note called 1.7.23 the latest, and 1.7.25 is out now. No advisory was found for 1.7.22, and `pnpm audit --audit-level=high` passes. The user asked to commit Phase 7 at 1.7.22 without deciding, so whether to bump is still open.
@@ -38,6 +53,146 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-17: Phase 8, admin panel (committed and pushed)
+
+The user said "do phase 8" (and earlier "we should build coupons"), so all six tasks were built in one go. Every choice below can be changed.
+
+**1. Admin shell and orders**
+- **Layout:** `src/app/admin/layout.tsx` calls `requireAdmin()` and shows the nav: Dashboard, Beats, Orders, Licenses, Coupons. Every admin page, route and action also calls `requireAdmin()` itself.
+- **Pages:**
+  - `/admin/orders`: 25 orders per page.
+  - `/admin/orders/[id]`:
+    - the order's details and items
+    - each download with "Reset to 0"
+    - "Make a new guest download link" (the link is shown once)
+    - a refund form with a required tick box
+- **Refunds** (`src/actions/orders.ts`):
+  - They refund what's left of the payment, with the idempotency key `refund-order-<orderId>`.
+  - The order turns REFUNDED when Stripe's `charge.refunded` webhook arrives, not in the action.
+  - The amount shown is the total minus any lost exclusive that was already refunded.
+- **`/account`:** shows an "Admin panel" link to admins.
+
+**2. Beats (`/admin/beats`, `/new`, `/[id]`, `src/actions/beats.ts`)**
+- **New beats:** a new beat is a DRAFT with every license on at its tier's default price. Its files are uploaded on its edit page, because their keys contain the beat id.
+- **Publishing** needs (`publishProblems()` in `src/lib/uploads.ts`):
+  - a preview
+  - at least one license on
+  - every file an active license includes
+
+  The cover is optional. The edit page lists what's missing.
+- **Status changes** are one conditional UPDATE:
+  - DRAFT or SOLD → PUBLISHED
+  - PUBLISHED or SOLD → DRAFT
+  - A RESERVED beat never changes, because a checkout is holding it.
+  - Re-listing a SOLD beat is how "the admin decides whether to re-list" after a refund works.
+- **Prices:**
+  - Typed in dollars and read into cents with whole-number maths (`dollarsToCents`).
+  - Allowed range: $0.50 (Stripe's minimum) to $999,999.99.
+  - Unticking a license takes it off sale.
+  - A published beat refuses a price change that would leave it unpublishable.
+- **No "delete beat":** orders point at beats. Move a beat to draft instead.
+- **Descriptions:** stored as typed and rendered by React as text. `tests/unit/no-raw-html.test.ts` fails if any file in `src/` uses `dangerouslySetInnerHTML`.
+
+**3. Uploads (`/api/upload`, `attachBeatFile`)**
+- **The upload link:**
+  - The browser asks `/api/upload` for a 10-minute PUT link.
+  - The server picks the bucket and the key (`uploads/<beatId>/<uuid>.<ext>`). The Content-Type must be on the allowlist for that kind of file.
+  - The link **signs the Content-Type**, so the PUT must send exactly that type.
+- **The check after the upload** (`attachBeatFile`):
+  - It checks the key's shape, runs `HeadObject` for the size limit of that kind of file, and reads the first 12 bytes (magic bytes).
+  - A file that fails is deleted and its key is never saved, so publishing stays blocked.
+  - PLAN.md §5.5 says "after upload, before publishing"; this runs at upload time. §5.5 and `uploads.md` now say so.
+- **Bug found and fixed:**
+  - The cause: AWS SDK 3.1167 adds a CRC32 checksum to every PUT. In a presigned link that's the checksum of an empty body, so every real upload failed with `BadDigest`.
+  - The fix: the S3 client now uses `requestChecksumCalculation: "WHEN_REQUIRED"`.
+  - Checked against local storage: the right type uploads (200), and a different Content-Type is refused (403). A test checks that the link has no checksum.
+- **Covers are public, like previews:**
+  - `Beat.coverUrl` was renamed to `coverKey` (migration `20261117082201_phase8_cover_key`). It's a RENAME, so no data is lost, and DB columns hold keys, never URLs.
+  - Covers show on beat cards and the beat page through `next/image` with `unoptimized` for now. Resizing is Phase 9.
+- **Local public bucket:**
+  - `pnpm storage:setup` (new, `scripts/setup-storage.ts`) creates both buckets and makes the public one readable.
+  - It also sets CORS on both: the site origin plus `http://localhost:3000` outside production, PUT and GET, and the Content-Type header.
+  - `pnpm demo:upload` now also puts the 12 demo previews in the public bucket.
+  - In `.env`, `PUBLIC_CDN_URL=http://localhost:8333/beatstore-previews`. `.env.example` keeps it empty, with a comment.
+- **Rename:** `previewUrl()` in `storage.ts` became `publicUrl()`, since covers use it too.
+
+**4. License tiers (`/admin/licenses`, `src/actions/licenses.ts`)**
+- **Editable:** name, short description, default price, stream and video limits (empty means unlimited), and terms.
+- **Read-only:** code, included files and display order. Published beats were checked against the included files.
+- **Default price:** used for new beats only. Existing beats keep their own prices.
+
+**5. Dashboard (`/admin`, `src/lib/dashboard.ts`)**
+- **Tiles:** revenue, paid orders, preview plays, published beats.
+- **Revenue:** PAID orders minus items refunded afterwards (lost exclusives). REFUNDED orders count as nothing. Days are UTC.
+- **Charts:** revenue by day (30 days) and two top-5 lists (sales, plays), drawn as plain CSS bars in `src/components/admin/Bars.tsx`:
+  - one colour, with the values in text
+  - a hover/focus label for each day
+  - a "Show as a table" view
+- **"Top beats by sales"** uses license prices before coupons.
+
+**6. Coupons (`/admin/coupons`, `src/actions/coupons.ts`, checkout)**
+- **Creating a code:**
+  - Exactly one of percent off (1–100) or amount off, plus an optional last day (UTC).
+  - Codes are stored in capitals, so buyers can type them in any case.
+  - A coupon can be turned off and on. One that no order uses can be deleted.
+  - Its discount can't be edited: make a new code instead.
+- **At checkout:**
+  - The server looks up the code; it must be on and not expired.
+  - The discount: a percent is rounded down to whole cents, and a fixed amount is at most the leases' total.
+- **Coupons don't apply to Exclusives:**
+  - The reason: a lost exclusive is refunded at its full price (`fulfilment.ts`), which is only right if no coupon touched it.
+  - A cart with only an Exclusive gets "Coupons don't apply to Exclusive licenses."
+- **The order:**
+  - A total under $0.50 is refused.
+  - `Order.couponId` is set, and `totalCents` is the discounted total.
+- **Stripe:**
+  - Stripe gets a one-off coupon for exactly that discount, passed in `discounts`.
+  - Its settings: `amount_off`, `duration: once`, `max_redemptions: 1`, idempotency key `coupon-<orderId>`.
+  - So Stripe's `amount_total` matches the order to the cent, and the webhook's amount check still passes.
+- **Where buyers see it:**
+  - The cart has a "Coupon code (optional)" field, but no discount preview. Stripe's page shows the discount.
+  - The success page and the admin order page show a coupon line.
+
+**Shared pieces and names**
+- **`src/components/admin/FormParts.tsx`:**
+  - the form hook, which keeps typed values when the server says no
+  - the message and field pieces
+  - used by the beat, tier and coupon forms
+- **`validators.ts`:** now holds `FormResult` and `invalidForm()`.
+- **Files not in PLAN.md §6:** `AdminLabels.tsx` (status badges and UTC dates) and `OrderActionForms.tsx` (refund, new link). §6 now lists `components/admin/`.
+- **`MIN_PRICE_CENTS`** (50) in `pricing.ts` is used by both prices and coupons.
+
+**Tests**
+- **Unit tests cover:**
+  - price parsing and coupon maths
+  - the beat, tier and coupon form schemas
+  - upload keys and magic bytes
+  - `publishProblems`
+  - the dashboard's days
+  - no raw HTML in `src/`
+- **Integration tests:**
+  - `admin-orders`
+  - `admin-beats`:
+    - the actions are admin-only
+    - an oversized or wrong-type file is deleted and publishing stays blocked
+    - keys from another beat are refused
+    - upload links
+  - `admin-panel`: tiers, coupons, dashboard numbers
+  - coupon cases in `checkout.test.ts`
+- **Fake sign-in:** `tests/integration/setup.ts` fakes `getCurrentUser`, so `requireUser` and `requireAdmin` behave like the real ones.
+- **Results:** lint, typecheck, 169 unit tests and 79 integration tests pass.
+
+**Other**
+- **Dev server restart:** the old process still had the Prisma client from before the `coverKey` rename, so the catalog failed with "Unknown field `coverKey`". The leftover `next dev` process on port 3000 (started earlier in this session) was stopped first, then a new one started.
+- **PLAN.md:**
+  - §4: `coverKey`
+  - §5.4: storage note
+  - §5.5: check timing
+  - §6: layout
+  - all Phase 8 boxes ticked
+- **CLAUDE.md:** `pnpm storage:setup` added to Commands.
+- **`uploads.md`:** covers are public, the check runs at upload, and the Content-Type is signed.
 
 ### 2026-11-17: Phase 7 checked end to end, Phase 6 closed (committed and pushed)
 

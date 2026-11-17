@@ -13,13 +13,14 @@ import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
 export const CATALOG_PAGE_SIZE = 9;
 
 // What a BeatCard needs. `licenses` holds only the cheapest active license,
-// which is the card's "From" price. `previewKey` is the public preview's
-// storage key. The keys of the full files are never loaded.
+// which is the card's "From" price. `previewKey` and `coverKey` are keys in
+// the public bucket. The keys of the full files are never loaded.
 const beatCardSelect = {
   id: true,
   slug: true,
   title: true,
   previewKey: true,
+  coverKey: true,
   bpm: true,
   musicalKey: true,
   genre: true,
@@ -160,12 +161,13 @@ export type FilterOptions = Awaited<ReturnType<typeof getFilterOptions>>;
 
 // What the beat page needs. The select lists every field, so the storage
 // keys of the full files (mp3Key, wavKey, stemsKey) are never loaded or sent
-// to the browser. Only the public preview's key is.
+// to the browser. Only the public preview's and cover's keys are.
 const beatDetailSelect = {
   id: true,
   slug: true,
   title: true,
   previewKey: true,
+  coverKey: true,
   description: true,
   bpm: true,
   musicalKey: true,

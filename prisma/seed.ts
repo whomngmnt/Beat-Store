@@ -10,7 +10,7 @@
 // Preview audio: a demo beat gets `previewKey = previews/<slug>.mp3` only if
 // `pnpm make-preview` has made public/previews/<slug>.mp3 (those files aren't
 // in git). Make the previews first, then run the seed (again). Demo beats
-// have no full files or cover (mp3Key, wavKey, stemsKey, coverUrl stay empty).
+// have no full files or cover (mp3Key, wavKey, stemsKey, coverKey stay empty).
 
 // First, so DATABASE_URL is set before db.ts creates the client.
 import "dotenv/config";

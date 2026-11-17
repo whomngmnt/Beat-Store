@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AudioLines } from "lucide-react";
 import { badgeVariants } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import {
 import { PlayButton } from "@/components/player/PlayButton";
 import type { BeatCardData } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
+import { publicUrl } from "@/lib/storage";
 import type { Track } from "@/store/player";
 
 // Badges are plain spans styled with badgeVariants: shadcn's <Badge> calls a
@@ -29,10 +31,20 @@ export function BeatCard({
 
   return (
     <Card className="h-full pt-0">
-      {/* Cover art comes with admin uploads (Phase 8). Until then every beat
-          gets this placeholder. */}
+      {/* The uploaded cover, or a placeholder for a beat without one. */}
       <div className="relative flex aspect-square items-center justify-center bg-muted">
-        <AudioLines className="size-12 text-muted-foreground" aria-hidden />
+        {beat.coverKey ? (
+          // Not optimized yet: Phase 9 turns on next/image's resizing.
+          <Image
+            src={publicUrl(beat.coverKey)}
+            alt=""
+            fill
+            unoptimized
+            className="object-cover"
+          />
+        ) : (
+          <AudioLines className="size-12 text-muted-foreground" aria-hidden />
+        )}
         {beat.status === "RESERVED" && (
           <span
             className={badgeVariants({ className: "absolute top-3 left-3" })}

@@ -18,7 +18,8 @@
     "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "make-preview": "tsx scripts/make-preview.ts",
-    "demo:upload": "tsx scripts/upload-demo-files.ts"
+    "demo:upload": "tsx scripts/upload-demo-files.ts",
+    "storage:setup": "tsx scripts/setup-storage.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [

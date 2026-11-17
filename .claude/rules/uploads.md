@@ -11,9 +11,9 @@ paths:
 
 - `/api/upload` is admin-only (`requireAdmin()`) and issues presigned PUT URLs.
 - The **server picks the key**: `uploads/<beatId>/<uuid>.<ext>`. The client never chooses it.
-- Content-Type must be on an allowlist: MP3, WAV, ZIP, PNG, JPEG, WebP.
-- A presigned PUT doesn't limit size. Before a beat can be published, run `HeadObject` on each file and check its size (cover ≤ 5 MB, MP3 ≤ 20 MB, WAV ≤ 200 MB, stems ZIP ≤ 1 GB). Then sniff the magic bytes (ID3/MPEG, RIFF/WAVE, PK zip, PNG/JPEG/WebP). Delete files that fail and block publishing.
+- Content-Type must be on an allowlist: MP3, WAV, ZIP, PNG, JPEG, WebP. The upload link signs it, so the PUT must send exactly that type.
+- A presigned PUT doesn't limit size. After each upload, before its key is saved on the beat (`attachBeatFile`), run `HeadObject` and check its size (cover ≤ 5 MB, MP3 ≤ 20 MB, WAV ≤ 200 MB, stems ZIP ≤ 1 GB). Then sniff the magic bytes (ID3/MPEG, RIFF/WAVE, PK zip, PNG/JPEG/WebP). Delete files that fail and never save their key, so publishing stays blocked: a beat can be published only when it has every file its active licenses include (`publishProblems` in `src/lib/uploads.ts`).
 - Bucket CORS allows only `NEXT_PUBLIC_SITE_URL` (plus `http://localhost:3000` in dev), with methods PUT and GET only.
 - Beat descriptions are plain text, rendered as text.
-- Previews come from `scripts/make-preview.ts` (ffmpeg): 128 kbps MP3, optional 60–90 s cut, producer tag every ~20 s. Only previews go in the public bucket.
+- Previews come from `scripts/make-preview.ts` (ffmpeg): 128 kbps MP3, optional 60–90 s cut, producer tag every ~20 s. Only previews and cover images go in the public bucket.
 - Tests: an oversized or wrong-type upload blocks publishing, and a `<script>` in a description renders as plain text.

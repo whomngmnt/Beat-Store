@@ -1,8 +1,11 @@
-// Uploads the demo beats' full files to the private bucket (PLAN.md §5.1),
-// so downloads can be tested for real. The S3_* values in .env say where:
-// locally, the storage server from docker-compose.yml.
+// Uploads the demo beats' files (PLAN.md §5.1), so previews and downloads
+// can be tested for real. The S3_* values in .env say where: locally, the
+// storage server from docker-compose.yml. Run `pnpm storage:setup` first.
 //
 //   pnpm demo:upload
+//
+// Each demo preview, public/previews/<slug>.mp3, goes to the public bucket
+// under its key (previews/<slug>.mp3), unless it's there already.
 //
 // For each beat that has audio-src/<slug>.wav:
 // - the WAV itself goes up as uploads/<beatId>/<uuid>.wav
@@ -27,7 +30,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db";
 import { getS3 } from "@/lib/storage";
 
@@ -64,16 +67,51 @@ async function upload(bucket: string, key: string, body: Buffer, type: string) {
   console.log(`  ${key} (${(body.length / 1024 / 1024).toFixed(1)} MB)`);
 }
 
+// True if the bucket already has a file under this key.
+async function exists(bucket: string, key: string) {
+  try {
+    await getS3().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const bucket = process.env.S3_PRIVATE_BUCKET;
-  if (!bucket) throw new Error("S3_PRIVATE_BUCKET must be set");
+  const publicBucket = process.env.S3_PUBLIC_BUCKET;
+  if (!bucket || !publicBucket) {
+    throw new Error("S3_PRIVATE_BUCKET and S3_PUBLIC_BUCKET must be set");
+  }
 
   const beats = await db.beat.findMany({
-    select: { id: true, slug: true, mp3Key: true, wavKey: true },
+    select: {
+      id: true,
+      slug: true,
+      previewKey: true,
+      mp3Key: true,
+      wavKey: true,
+    },
     orderBy: { slug: "asc" },
   });
 
   let uploaded = 0;
+  for (const beat of beats) {
+    if (!beat.previewKey) continue;
+    // Seeded preview keys point at files in public/ (prisma/seed.ts).
+    const file = path.join("public", beat.previewKey);
+    if (!existsSync(file) || (await exists(publicBucket, beat.previewKey))) {
+      continue;
+    }
+    await upload(
+      publicBucket,
+      beat.previewKey,
+      await readFile(file),
+      "audio/mpeg",
+    );
+    uploaded++;
+  }
+
   for (const beat of beats) {
     const wav = path.join("audio-src", `${beat.slug}.wav`);
     if (!existsSync(wav) || (beat.wavKey && beat.mp3Key)) continue;

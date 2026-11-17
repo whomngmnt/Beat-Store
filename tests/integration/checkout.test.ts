@@ -1,5 +1,6 @@
 // createCheckoutSession against the real database (PLAN.md §5.2, §5.4).
 // Only Stripe is faked: the session it "creates" is a made-up id and URL.
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCheckoutSession } from "../../src/actions/checkout";
 import { getCurrentUser } from "../../src/lib/auth-guards"; // faked in setup.ts
@@ -13,9 +14,15 @@ import {
   fakeStripeId,
 } from "./fixtures";
 
-const { createSession } = vi.hoisted(() => ({ createSession: vi.fn() }));
+const { createSession, createStripeCoupon } = vi.hoisted(() => ({
+  createSession: vi.fn(),
+  createStripeCoupon: vi.fn(),
+}));
 vi.mock("../../src/lib/stripe", () => ({
-  getStripe: () => ({ checkout: { sessions: { create: createSession } } }),
+  getStripe: () => ({
+    checkout: { sessions: { create: createSession } },
+    coupons: { create: createStripeCoupon },
+  }),
 }));
 
 let beat: Awaited<ReturnType<typeof createTestBeat>>;
@@ -29,6 +36,8 @@ beforeEach(async () => {
     id: fakeStripeId("cs"),
     url: "https://checkout.stripe.com/c/pay/fake",
   }));
+  createStripeCoupon.mockReset();
+  createStripeCoupon.mockResolvedValue({ id: "fake_stripe_coupon" });
   beat = await createTestBeat();
 });
 
@@ -175,5 +184,150 @@ describe("createCheckoutSession", () => {
     expect(await createCheckoutSession([])).toHaveProperty("error");
     expect(await createCheckoutSession("not a cart")).toHaveProperty("error");
     expect(createSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("coupons at checkout", () => {
+  let couponIds: string[];
+  let otherBeatIds: string[];
+
+  beforeEach(() => {
+    couponIds = [];
+    otherBeatIds = [];
+  });
+
+  afterEach(async () => {
+    // Orders point at their coupon. The beats' cleanup deletes the orders.
+    await db.order.updateMany({
+      where: { couponId: { in: couponIds } },
+      data: { couponId: null },
+    });
+    await db.coupon.deleteMany({ where: { id: { in: couponIds } } });
+    for (const id of otherBeatIds) await deleteTestBeat(id);
+  });
+
+  async function testCoupon(data: {
+    percentOff?: number;
+    amountOffCents?: number;
+    active?: boolean;
+    expiresAt?: Date;
+  }) {
+    const coupon = await db.coupon.create({
+      data: { code: `TEST-${randomUUID().slice(0, 8).toUpperCase()}`, ...data },
+    });
+    couponIds.push(coupon.id);
+    return coupon;
+  }
+
+  it("takes the discount off the total and gives Stripe exactly that discount", async () => {
+    const coupon = await testCoupon({ percentOff: 15 });
+
+    // Typed in lower case: codes are matched in capitals.
+    const result = await createCheckoutSession(
+      [beat.cartItem("PREMIUM")],
+      coupon.code.toLowerCase(),
+    );
+
+    expect(result).toHaveProperty("url");
+    const price = beat.tier("PREMIUM").defaultPriceCents;
+    const discount = Math.floor((price * 15) / 100); // rounded down
+    const [order] = await ordersForBeat();
+    expect(order.couponId).toBe(coupon.id);
+    expect(order.totalCents).toBe(price - discount);
+    expect(order.items[0].priceCents).toBe(price); // the item keeps its price
+    expect(createStripeCoupon).toHaveBeenCalledWith(
+      {
+        amount_off: discount,
+        currency: "usd",
+        duration: "once",
+        max_redemptions: 1,
+        name: coupon.code,
+      },
+      { idempotencyKey: `coupon-${order.id}` },
+    );
+    expect(createSession.mock.calls[0][0].discounts).toEqual([
+      { coupon: "fake_stripe_coupon" },
+    ]);
+  });
+
+  it("takes nothing off an Exclusive in the same cart", async () => {
+    const other = await createTestBeat();
+    otherBeatIds.push(other.beatId);
+    const coupon = await testCoupon({ amountOffCents: 100_000 }); // $1,000 off
+
+    const result = await createCheckoutSession(
+      [beat.cartItem("EXCLUSIVE"), other.cartItem("BASIC")],
+      coupon.code,
+    );
+
+    expect(result).toHaveProperty("url");
+    const [order] = await ordersForBeat();
+    // The whole lease is free, the exclusive costs its full price.
+    expect(order.totalCents).toBe(beat.tier("EXCLUSIVE").defaultPriceCents);
+    expect(createStripeCoupon.mock.calls[0][0].amount_off).toBe(
+      other.tier("BASIC").defaultPriceCents,
+    );
+  });
+
+  it("refuses a coupon on a cart with only an Exclusive", async () => {
+    const coupon = await testCoupon({ percentOff: 10 });
+
+    const result = await createCheckoutSession(
+      [beat.cartItem("EXCLUSIVE")],
+      coupon.code,
+    );
+
+    expect(result).toEqual({
+      error: "Coupons don't apply to Exclusive licenses.",
+    });
+    expect(await ordersForBeat()).toHaveLength(0);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown, turned-off or expired code before making an order", async () => {
+    const off = await testCoupon({ percentOff: 10, active: false });
+    const expired = await testCoupon({
+      percentOff: 10,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    for (const code of [
+      "NOT-A-REAL-CODE",
+      off.code,
+      expired.code,
+      "<b>x</b>",
+    ]) {
+      const result = await createCheckoutSession(
+        [beat.cartItem("BASIC")],
+        code,
+      );
+      expect(result).toHaveProperty("error");
+      expect((result as { error: string }).error).toMatch(/isn't valid/);
+    }
+    expect(await ordersForBeat()).toHaveLength(0);
+    expect(createStripeCoupon).not.toHaveBeenCalled();
+  });
+
+  it("refuses a total under Stripe's $0.50 minimum", async () => {
+    const coupon = await testCoupon({ percentOff: 100 });
+
+    const result = await createCheckoutSession(
+      [beat.cartItem("BASIC")],
+      coupon.code,
+    );
+
+    expect((result as { error: string }).error).toMatch(/under \$0\.50/);
+    expect(await ordersForBeat()).toHaveLength(0);
+  });
+
+  it("treats an empty code as no coupon", async () => {
+    const result = await createCheckoutSession([beat.cartItem("BASIC")], "  ");
+
+    expect(result).toHaveProperty("url");
+    const [order] = await ordersForBeat();
+    expect(order.couponId).toBeNull();
+    expect(order.totalCents).toBe(beat.tier("BASIC").defaultPriceCents);
+    expect(createStripeCoupon).not.toHaveBeenCalled();
+    expect(createSession.mock.calls[0][0]).not.toHaveProperty("discounts");
   });
 });
