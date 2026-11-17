@@ -1,20 +1,30 @@
 // The download route and the admin download fixes against the real
 // database (PLAN.md §5.1, .claude/rules/downloads.md). Storage is never
 // reached: signing a link is offline (fake S3 settings in setup.ts).
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../../src/app/api/download/[orderItemId]/[fileType]/route";
 import type { FileType, LicenseCode } from "../../src/generated/prisma/client";
+import { getCurrentUser } from "../../src/lib/auth-guards"; // faked in setup.ts
 import { db } from "../../src/lib/db";
 import {
   reissueDownloadToken,
   resetDownloadCount,
 } from "../../src/lib/downloads";
 import { createDownloadToken } from "../../src/lib/tokens";
-import { createTestBeat, deleteTestBeat, fakeStripeId } from "./fixtures";
+import {
+  createTestBeat,
+  createTestUser,
+  deleteTestBeat,
+  deleteTestUser,
+  fakeStripeId,
+} from "./fixtures";
 
 let beat: Awaited<ReturnType<typeof createTestBeat>>;
+let userIds: string[];
 
 beforeEach(async () => {
+  vi.mocked(getCurrentUser).mockResolvedValue(null); // signed out
+  userIds = [];
   beat = await createTestBeat();
   // The full MP3 and WAV are uploaded; the stems aren't.
   await db.beat.update({
@@ -27,12 +37,23 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await deleteTestBeat(beat.beatId);
+  await deleteTestBeat(beat.beatId); // the orders go first
+  for (const id of userIds) await deleteTestUser(id);
 });
 
+async function signIn(emailVerified = true) {
+  const user = await createTestUser(emailVerified);
+  userIds.push(user.id);
+  vi.mocked(getCurrentUser).mockResolvedValue(user);
+  return user;
+}
+
 // A PAID order for this beat with the Download rows fulfilment would make,
-// and its raw guest token.
-async function paidOrder(code: LicenseCode = "TRACKOUT") {
+// and its raw guest token. `owner` sets the order's userId or guest email.
+async function paidOrder(
+  code: LicenseCode = "TRACKOUT",
+  owner: { userId?: string; email?: string } = {},
+) {
   const tier = beat.tier(code);
   const { token, hash, expiresAt } = createDownloadToken();
   const fileTypes: FileType[] = [];
@@ -42,6 +63,7 @@ async function paidOrder(code: LicenseCode = "TRACKOUT") {
 
   const order = await db.order.create({
     data: {
+      ...owner,
       status: "PAID",
       totalCents: tier.defaultPriceCents,
       stripeSessionId: fakeStripeId("cs"),
@@ -126,6 +148,34 @@ describe("GET /api/download/[orderItemId]/[fileType]", () => {
 
     expect(response.status).toBe(403);
     expect(await countOf(theirs.item.id, "MP3")).toBe(0);
+  });
+
+  it("lets the signed-in owner download without a token", async () => {
+    const me = await signIn();
+    const { item } = await paidOrder("TRACKOUT", { userId: me.id });
+
+    expect((await download(item.id, "MP3")).status).toBe(302);
+    expect(await countOf(item.id, "MP3")).toBe(1);
+  });
+
+  it("refuses a signed-in user who doesn't own the order", async () => {
+    const other = await createTestUser(true);
+    userIds.push(other.id);
+    const { item } = await paidOrder("TRACKOUT", { userId: other.id });
+    await signIn();
+
+    expect((await download(item.id, "MP3")).status).toBe(403);
+    expect(await countOf(item.id, "MP3")).toBe(0);
+  });
+
+  it("serves a guest order to a signed-in user with that email only if it's verified", async () => {
+    const unverified = await signIn(false);
+    const guest = await paidOrder("TRACKOUT", { email: unverified.email });
+    expect((await download(guest.item.id, "MP3")).status).toBe(403);
+
+    const verified = await signIn(true);
+    const other = await paidOrder("TRACKOUT", { email: verified.email });
+    expect((await download(other.item.id, "MP3")).status).toBe(302);
   });
 
   it("refuses an expired token with 403", async () => {

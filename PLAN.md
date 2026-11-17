@@ -348,7 +348,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 5: Stripe checkout (days 13–16)
 
-- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in (Stripe done; R2, Neon and Google still to do)
+- [ ] Create Stripe (test), Cloudflare R2 and Neon accounts, plus a Google OAuth client for sign-in (Stripe and Google done; R2 and Neon still to do)
 - [x] `lib/stripe.ts`, `actions/checkout.ts` (section 5.2, server-side price lookup)
 - [x] `lib/reservation.ts`: atomic exclusive reservation inside the order transaction (5.4), session `expires_at` = 31 min (Stripe's minimum is 30)
 - [x] Webhook route: raw-body signature check, `payment_status`/amount/currency check, `WebhookEvent` insert inside the transaction
@@ -363,15 +363,15 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 - [x] `lib/storage.ts` with signed GET URLs
 - [x] `lib/tokens.ts`: 32-byte random guest token, only its SHA-256 hash stored, 30-day expiry (made at checkout; the raw token rides in the Stripe `success_url`, so the success page is the bookmarkable download link)
-- [x] Download route: owner or token check, PAID check, atomic `count < maxCount` limit (5 per file), 10-min signed URL (token check only until Phase 7 adds the signed-in owner)
+- [x] Download route: owner or token check, PAID check, atomic `count < maxCount` limit (5 per file), 10-min signed URL (the signed-in owner check came with Phase 7)
 - [x] Exclusive sale marks the beat SOLD (only if it's still reserved by this order) and hides it from the catalog (built in Phase 5)
-- [ ] Admin: reset download count / reissue guest token (the functions and tests are in `lib/downloads.ts`; the buttons on the admin order page need `requireAdmin()` from Phase 7 and the admin panel from Phase 8)
+- The admin buttons to reset a download count and reissue a guest token moved to Phase 8, next to the admin order page they live on. Their functions and tests are already in `lib/downloads.ts`.
 
 ### Phase 7: Auth & account (days 20–21)
 
-- [ ] Better Auth with the Prisma adapter and Google sign-in (magic link comes with the email slice)
-- [ ] `lib/auth-guards.ts` (`requireUser`, `requireAdmin`) called in **every** protected page, route and server action; `proxy.ts` (Next.js 16's name for middleware) only for redirects
-- [ ] `/account` order history and re-downloads; link guest orders by email **only for verified emails** (Google with `email_verified`; magic link once the email slice exists)
+- [x] Better Auth with the Prisma adapter and Google sign-in (magic link comes with the email slice)
+- [x] `lib/auth-guards.ts` (`requireUser`, `requireAdmin`) called in **every** protected page, route and server action; `proxy.ts` (Next.js 16's name for middleware) only for redirects
+- [x] `/account` order history and re-downloads; link guest orders by email **only for verified emails** (Google with `email_verified`; magic link once the email slice exists)
 
 ### Phase 8: Admin panel (days 22–26)
 
@@ -382,6 +382,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] Descriptions are plain text: render as text (React escapes it), never `dangerouslySetInnerHTML`
 - [ ] License tier template editor and per-beat price overrides
 - [ ] Orders table and detail page, refund (Stripe API)
+- [ ] On the order detail page: reset a download count and reissue the guest token (moved from Phase 6; the functions and tests are already in `lib/downloads.ts`, and each action calls `requireAdmin()` first)
 - [ ] Dashboard stats and charts (revenue by day, top beats)
 - [ ] Coupons CRUD (optional), with the coupon maths in `lib/pricing.ts` (unit-tested) and a code field at checkout
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { getCurrentUser } from "@/lib/auth-guards";
 import { getCartLines, type CartLine } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { cartTotalCents } from "@/lib/pricing";
@@ -38,8 +39,9 @@ class ExclusiveTaken extends Error {}
 // Returns the Stripe page to send the buyer to, or a message to show.
 //
 // Public on purpose: guests can buy without signing in, so there's no
-// requireUser() here. Accounts come in Phase 7, and then the order gets the
-// signed-in user's id. Only the two ids per line come from the browser:
+// requireUser() here. A signed-in buyer's order gets their user id (read
+// from the session on the server, never sent by the browser), so it shows
+// in /account. Only the two ids per line come from the browser:
 // prices, titles and the total are all read and worked out here.
 // Known limit: anyone can call this to hold an exclusive for 35 minutes.
 // The rate-limiting later slice (Upstash) covers that.
@@ -67,6 +69,7 @@ export async function createCheckoutSession(
   // the buyer's download link. It's made before payment, but the download
   // route serves PAID orders only.
   const download = createDownloadToken();
+  const user = await getCurrentUser();
 
   // Step 3: one transaction creates the PENDING order and holds every
   // exclusive. If one is taken, the throw rolls back the order too.
@@ -75,6 +78,7 @@ export async function createCheckoutSession(
     orderId = await db.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
+          userId: user?.id ?? null,
           totalCents,
           downloadTokenHash: download.hash,
           downloadTokenExpiresAt: download.expiresAt,
@@ -131,6 +135,9 @@ export async function createCheckoutSession(
           },
         })),
         metadata: { orderId },
+        // A signed-in buyer's email fills Stripe's email field, so the
+        // order's email matches their account.
+        ...(user && { customer_email: user.email }),
         expires_at: Math.floor(Date.now() / 1000) + SESSION_MINUTES * 60,
         // base64url needs no escaping in a URL.
         success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}&token=${download.token}`,

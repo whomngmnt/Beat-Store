@@ -1,6 +1,14 @@
 // Runs before every integration test file, before it imports app code.
 // DATABASE_URL comes from .env (the local Docker Postgres).
 import "dotenv/config";
+import { vi } from "vitest";
+
+// Nobody is signed in. Outside a real request Next's headers() can't be
+// read, so the session lookup is faked for every test file. A test signs
+// someone in with vi.mocked(getCurrentUser).mockResolvedValue(user).
+vi.mock("../../src/lib/auth-guards", () => ({
+  getCurrentUser: vi.fn(async () => null),
+}));
 
 // Fake Stripe settings, so a real key in .env is never used by a test.
 // Signing and checking webhook signatures works offline with any secret.

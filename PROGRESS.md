@@ -4,12 +4,16 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 ## Current status
 
-- **Stage:** Phase 6 (delivery) is committed and pushed (`25785a7`). 4 of the 5 Phase 6 boxes are ticked. The admin box stays open: its functions exist, but its buttons need Phase 7 auth and the Phase 8 admin panel. Local S3 storage is built, and a real download works end to end (not committed yet). The Phase 1 seed box is now ticked. Only the Phase 5 accounts box is open (R2, Neon, Google).
-- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. `1956f62` (PROGRESS.md cleanup) is committed but not pushed. Everything before it is pushed.
-- **Next step:** the user reviews the local storage diff, then commit. Then Phase 7: auth & account, plan first.
+- **Stage:** Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
+- **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to `defa98a` (local storage) is pushed to `origin/develop`.
+- **Next step:** Phase 8: admin panel, plan first.
 
 ## Open questions
 
+- **Signed-in re-download not tried in a browser.** On 2026-11-17 the user skipped the test payment, so the admin account has no paid order. Downloading from `/account` without a token is covered by integration tests only (`download.test.ts`). A PENDING test order (Glass Heart Premium, $49.99, owned by the admin) is left in the local database. Its Stripe session expires 31 minutes after it was made.
+- **Google sign-in is in Testing mode.** Only the test users listed in Google Cloud (project `beat-store-dev`, Google Auth Platform → Audience) can sign in. Right now that's the admin's Google account. Before real buyers sign in (Phase 10): publish the app, add the production redirect URI `https://<domain>/api/auth/callback/google`, and check Google's current rules for apps that ask only for `openid email profile`.
+- **Better Auth is pinned to 1.7.22.** The 2026-11-14 plan note called 1.7.23 the latest, and 1.7.25 is out now. No advisory was found for 1.7.22, and `pnpm audit --audit-level=high` passes. The user asked to commit Phase 7 at 1.7.22 without deciding, so whether to bump is still open.
+- **Hydration warning from Grammarly, not our code.** The Next.js dev overlay shows "1 issue": a hydration mismatch on `<body>` from `data-gr-*` attributes, which the Grammarly browser extension adds. It doesn't happen in a browser without the extension.
 - **Downloads work locally, but R2 hasn't been tried.** On 2026-11-14 a real test purchase downloaded real files from the local SeaweedFS server. R2 itself still has to be set up before deploying (Phase 10): create the bucket, put its `S3_*` values in the deployed env, upload a file and download it once. The links use path style there too.
 - **The raw guest token is stored at Stripe.** It's part of the Checkout Session's `success_url`, so anyone with access to the Stripe account can see it. This was accepted when choosing option A.
 - **Stripe feedback not sent.** The user approved sending feedback about `stripe listen` needing `--events`. Claude Code's auto mode blocked the command as an external write. The user can run it with `!` if they still want it sent.
@@ -30,12 +34,64 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 - **Guest download link (Phase 6): decided 2026-11-13, option A.** The token is made at checkout. Its hash goes on the order, and the raw token goes in Stripe's `success_url`, so the success page is the bookmarkable download link.
 - **Guest email (Phase 5): done with the default.** Fulfilment saves the email the buyer typed in Stripe Checkout (`customer_details.email`) on the order.
-- **Admin sign-in (Phase 7).** The seed creates the admin `User` from `ADMIN_EMAIL` with `emailVerified: false` and no Google account linked. When Better Auth arrives, check that signing in with Google under that email links to this existing user instead of failing or creating a second one.
+- **Admin sign-in (Phase 7): done 2026-11-17.** The seed now marks the admin as verified. Signing in with Google under `ADMIN_EMAIL` linked to the seeded admin: one user, role ADMIN, a `google` account row, and no second user.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
 
-### 2026-11-14: Local S3 storage and a real download (not committed yet)
+### 2026-11-17: Phase 7 checked end to end, Phase 6 closed (committed and pushed)
+
+The Phase 7 code was written on 2026-11-14, after the plan below, but PROGRESS.md wasn't updated then. This entry covers what it contains and what was checked today.
+
+**What Phase 7 contains:**
+- **`src/lib/auth.ts`:** Better Auth with the Prisma adapter and Google (always shows the account picker). `role` is an extra user field with `input: false`, so sign-in can never set it. Ids come from the schema (`generateId: false`).
+- **`src/lib/auth-guards.ts`:** `getCurrentUser()`, `requireUser()` (signed out → `/sign-in`), `requireAdmin()` (non-admin → `/`). There's no `proxy.ts`: it could only see that a cookie exists, so it would never be the real check.
+- **`src/lib/account.ts`:** one rule for which orders are the user's: their own, plus guest orders with the same email (any case) only if the email is verified. Used by `/account` and by the download route. Nothing is written: a guest order stays a guest order.
+- **Pages:**
+  - `/sign-in`: Google button only. A signed-in visitor goes to `/account`.
+  - `/account`: `requireUser()` first, then PAID and REFUNDED orders, newest first, with downloads.
+  - `/api/auth/[...all]`: Better Auth's endpoints.
+- **Components:** `GoogleSignInButton`, `SignOutButton` (through `src/lib/auth-client.ts`), and `OrderItemList`, which is shared by the success page and `/account`.
+- **Download route:** a valid token, or else the signed-in owner. The session is looked up only when there's no valid token.
+- **Checkout:** a signed-in buyer's order gets their user id, read on the server. Their email pre-fills Stripe's email field.
+- **Schema:** `Session`, `Account` and `Verification` tables for Better Auth (migration `20261114083214_phase7_auth`).
+- **Seed:** lowercases `ADMIN_EMAIL` and marks the admin verified.
+- **Tests:** `auth-guards.test.ts` (unit), `account.test.ts` (integration), new cases in `download.test.ts` and `checkout.test.ts`.
+
+**Set up today (2026-11-17):**
+- **Google Cloud:** project `beat-store-dev` on the admin's Google account. The OAuth consent screen is "Beat Store": External, Testing, with the admin as the only test user. The client "Beat Store local dev" is a Web application with redirect URI `http://localhost:3000/api/auth/callback/google`. The user turned on 2-Step Verification, which Google Cloud now requires, accepted the Cloud Terms and the API User Data Policy, and pasted the client id and secret into `.env`.
+- **`.env`:**
+  - `ADMIN_EMAIL` set to the user's Google address (it was a placeholder).
+  - `STRIPE_WEBHOOK_SECRET` replaced with the Stripe CLI's current secret (`stripe listen --print-secret`). The old value didn't match, and both are for the same Stripe account.
+- **Local database:** the seed was re-run. The old placeholder admin user was deleted; it had no orders, sessions or accounts.
+
+**Checked:**
+- Lint, typecheck and `pnpm audit --audit-level=high` pass. The audit's only finding is a moderate `minimatch` advisory, which comes in through the `shadcn` CLI.
+- Unit tests: 143 pass. Integration tests: 48 pass.
+- **In the browser:**
+  - Signed out, `/account` goes to `/sign-in`.
+  - Google sign-in: `POST /api/auth/sign-in/social` 200, then the callback 302. It linked to the seeded admin: one user, ADMIN, verified, a `google` account row.
+  - `/account` shows the admin's email and "No orders yet". That's correct: the paid test order belongs to `buyer@example.com`.
+  - Checkout while signed in made a PENDING order with the admin's user id.
+  - Sign-out deleted the session row, and `/account` went back to `/sign-in`.
+- **Not checked:** paying that order and downloading from `/account` (the user skipped the payment). See Open questions.
+
+**PLAN.md:**
+- Phase 6's admin box moved to Phase 8, next to the order detail page (option A).
+- Phase 6's download-route line updated.
+- All three Phase 7 boxes ticked.
+- The Phase 5 accounts box now says Stripe and Google are done.
+
+### 2026-11-14: Phase 7 plan
+
+Docs checked 2026-11-14:
+- **Version:** Better Auth 1.7.23 is the latest. It ships the Prisma adapter (`better-auth/adapters/prisma`), supports Prisma 7, and works with Next.js 16. Every 2026 advisory found was fixed by 1.7.7.
+- **Admin sign-in would fail as seeded.** Better Auth links a Google sign-in to an existing user with the same email only if that user's own `emailVerified` is true (`accountLinking.requireLocalEmailVerified`, default `true`, checked in the 1.7.23 source). The seed creates the admin with `false`, so Google sign-in would end with "account not linked". The plan: the seed marks the admin as verified.
+- **New Google users:** `emailVerified` is copied from Google's `email_verified` claim.
+- **Cookie check:** `getSessionCookie()` only checks that a cookie exists, so it's never a security check.
+- **Rate limiting:** the built-in limiter is on only in production, and stores its counts in memory.
+
+### 2026-11-14: Local S3 storage and a real download (commit `defa98a`, pushed)
 
 The user OK'd the plan below: SeaweedFS, Claude filling the local S3 values in `.env`, and ticking the seed box.
 
@@ -682,6 +738,5 @@ Decisions:
 
 ## Up next
 
-- [ ] Review and commit the local S3 storage work (2026-11-14 log entry)
-- [ ] Phase 7: Auth & account (PLAN.md §8), plan first. Needs a Google OAuth client.
-- [ ] Phase 6 admin box: the reset and reissue buttons, once Phase 7 and the Phase 8 admin panel exist
+- [ ] Decide whether to bump Better Auth from 1.7.22 (see Open questions).
+- [ ] Phase 8: Admin panel (PLAN.md §8), plan first. It includes the reset and reissue buttons moved from Phase 6.

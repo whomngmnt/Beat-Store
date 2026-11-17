@@ -63,6 +63,22 @@ export async function deleteTestBeat(beatId: string) {
   await db.beat.delete({ where: { id: beatId } });
 }
 
+// A user, as Better Auth would create it after a Google sign-in. The email
+// is unique per test. Delete the user's orders (deleteTestBeat) first.
+export function createTestUser(emailVerified: boolean) {
+  return db.user.create({
+    data: {
+      name: "Test buyer",
+      email: `buyer-${randomUUID()}@example.com`,
+      emailVerified,
+    },
+  });
+}
+
+export async function deleteTestUser(userId: string) {
+  await db.user.delete({ where: { id: userId } });
+}
+
 // A fake Stripe id, such as a Checkout Session id "cs_test_…".
 export function fakeStripeId(prefix: string) {
   return `${prefix}_test_${randomUUID().replaceAll("-", "")}`;

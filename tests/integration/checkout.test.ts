@@ -2,9 +2,16 @@
 // Only Stripe is faked: the session it "creates" is a made-up id and URL.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCheckoutSession } from "../../src/actions/checkout";
+import { getCurrentUser } from "../../src/lib/auth-guards"; // faked in setup.ts
 import { db } from "../../src/lib/db";
 import { hashToken } from "../../src/lib/tokens";
-import { createTestBeat, deleteTestBeat, fakeStripeId } from "./fixtures";
+import {
+  createTestBeat,
+  createTestUser,
+  deleteTestBeat,
+  deleteTestUser,
+  fakeStripeId,
+} from "./fixtures";
 
 const { createSession } = vi.hoisted(() => ({ createSession: vi.fn() }));
 vi.mock("../../src/lib/stripe", () => ({
@@ -12,8 +19,11 @@ vi.mock("../../src/lib/stripe", () => ({
 }));
 
 let beat: Awaited<ReturnType<typeof createTestBeat>>;
+let userIds: string[];
 
 beforeEach(async () => {
+  userIds = [];
+  vi.mocked(getCurrentUser).mockResolvedValue(null); // signed out
   createSession.mockReset();
   createSession.mockImplementation(async () => ({
     id: fakeStripeId("cs"),
@@ -23,7 +33,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await deleteTestBeat(beat.beatId);
+  await deleteTestBeat(beat.beatId); // the orders go first
+  for (const id of userIds) await deleteTestUser(id);
 });
 
 const ordersForBeat = () =>
@@ -110,6 +121,23 @@ describe("createCheckoutSession", () => {
       (24 * 60 * 60 * 1000);
     expect(days).toBeGreaterThan(29.99);
     expect(days).toBeLessThanOrEqual(30);
+  });
+
+  it("gives a signed-in buyer's order their user id and email; a guest's gets neither", async () => {
+    const result = await createCheckoutSession([beat.cartItem("BASIC")]);
+    expect(result).toHaveProperty("url");
+    expect(createSession.mock.calls[0][0]).not.toHaveProperty("customer_email");
+
+    const user = await createTestUser(true);
+    userIds.push(user.id);
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    await createCheckoutSession([beat.cartItem("PREMIUM")]);
+    expect(createSession.mock.calls[1][0].customer_email).toBe(user.email);
+
+    const orders = await ordersForBeat();
+    expect(orders.map((order) => order.userId).sort()).toEqual(
+      [null, user.id].sort(),
+    );
   });
 
   it("frees the exclusive and marks the order FAILED when Stripe fails", async () => {

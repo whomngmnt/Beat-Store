@@ -4,7 +4,7 @@
 //
 // Safe to run again: every upsert has `update: {}`, so a second run only adds
 // what's missing and never overwrites edits. The one exception is the admin,
-// whose role is always set back to ADMIN. To start over:
+// who is always set back to ADMIN and verified. To start over:
 // `pnpm prisma migrate reset`, then `pnpm db:seed`.
 //
 // Preview audio: a demo beat gets `previewKey = previews/<slug>.mp3` only if
@@ -220,7 +220,8 @@ const beats: Prisma.BeatCreateInput[] = [
 
 async function main() {
   // The real address lives only in .env, never in this file.
-  const adminEmail = process.env.ADMIN_EMAIL;
+  // Lowercase, because Better Auth looks users up by the lowercased email.
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
   if (!adminEmail) throw new Error("ADMIN_EMAIL is not set in .env");
 
   for (const tier of tiers) {
@@ -231,10 +232,19 @@ async function main() {
     });
   }
 
+  // emailVerified: true, because Better Auth links a Google sign-in to an
+  // existing user only if that user is verified already. The site owner
+  // chose this address in .env, and Google is the only way to sign in, so
+  // only the owner of that Google account can get in as admin.
   await db.user.upsert({
     where: { email: adminEmail },
-    update: { role: "ADMIN" },
-    create: { email: adminEmail, name: "Admin", role: "ADMIN" },
+    update: { role: "ADMIN", emailVerified: true },
+    create: {
+      email: adminEmail,
+      name: "Admin",
+      role: "ADMIN",
+      emailVerified: true,
+    },
   });
 
   // Each beat gets one BeatLicense per tier, priced at the tier's default.

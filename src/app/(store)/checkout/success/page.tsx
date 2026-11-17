@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ClearCart } from "@/components/cart/ClearCart";
+import { OrderItemList } from "@/components/orders/OrderItemList";
 import { buttonVariants } from "@/components/ui/button";
 import { confirmCheckout } from "@/lib/fulfilment";
 import { formatPrice } from "@/lib/pricing";
@@ -11,8 +12,6 @@ export const metadata: Metadata = {
   title: "Your order",
   robots: { index: false },
 };
-
-const fileNames = { MP3: "MP3", WAV: "WAV", STEMS: "Stems (ZIP)" } as const;
 
 // Where Stripe sends the buyer after paying (PLAN.md §5.2, step 8).
 // `session_id` is only a lookup key: confirmCheckout() reads the order from
@@ -87,56 +86,11 @@ export default async function CheckoutSuccessPage({
         )}
       </div>
 
-      <ul className="flex flex-col divide-y">
-        {order.items.map((item) => (
-          <li key={item.id} className="flex flex-col gap-1 py-3">
-            <div className="flex justify-between gap-3">
-              <span className="font-medium">
-                {item.beatTitleSnapshot} · {item.licenseNameSnapshot}
-              </span>
-              <span>{formatPrice(item.priceCents)}</span>
-            </div>
-            {item.refundNeeded ? (
-              <p className="text-sm text-destructive">
-                Another buyer got this exclusive just before your payment went
-                through. This item is refunded in full.
-              </p>
-            ) : downloadToken ? (
-              <ul className="flex flex-col gap-2 pt-1">
-                {item.downloads.map((download) => (
-                  <li
-                    key={download.fileType}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    {/* A plain <a>, not <Link>: Next can prefetch a Link,
-                        and fetching this URL counts as a download. */}
-                    <a
-                      href={`/api/download/${item.id}/${download.fileType}?token=${downloadToken}`}
-                      className={buttonVariants({
-                        variant: "outline",
-                        size: "sm",
-                      })}
-                    >
-                      Download {fileNames[download.fileType]}
-                    </a>
-                    <span className="text-sm text-muted-foreground">
-                      {Math.max(download.maxCount - download.count, 0)} of{" "}
-                      {download.maxCount} downloads left
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Files:{" "}
-                {item.downloads
-                  .map((download) => fileNames[download.fileType])
-                  .join(", ")}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+      <OrderItemList
+        items={order.items}
+        showDownloads={downloadToken !== null}
+        token={downloadToken ?? undefined}
+      />
 
       <div className="flex justify-between border-t pt-3 font-medium">
         <span>Total paid</span>

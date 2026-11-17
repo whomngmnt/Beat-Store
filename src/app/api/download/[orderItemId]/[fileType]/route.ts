@@ -1,8 +1,11 @@
 // Downloads a bought file (PLAN.md §5.1, .claude/rules/downloads.md):
 // GET /api/download/<orderItemId>/<MP3|WAV|STEMS>?token=<guest token>
 //
-// No requireUser(): guests buy without an account, so the guest token is
-// the check. Phase 7 adds the other way in: the signed-in owner of the order.
+// Two ways in: the order's guest token (the success page's links), or being
+// signed in as the order's owner (the /account page's links, which have no
+// token). No requireUser(), because guests buy without an account.
+import { userOwnsOrder } from "@/lib/account";
+import { getCurrentUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { signDownloadUrl } from "@/lib/storage";
 import { tokenMatches } from "@/lib/tokens";
@@ -24,6 +27,7 @@ export async function GET(
   const item = await db.orderItem.findUnique({
     where: { id: orderItemId },
     select: {
+      orderId: true,
       refundNeeded: true,
       order: {
         select: {
@@ -39,18 +43,19 @@ export async function GET(
     },
   });
 
-  // 1. The token belongs to this item's order and hasn't expired. An
-  // unknown item gets the same 403, so the route doesn't reveal which ids
-  // exist.
-  if (
-    !item ||
-    !token.success ||
-    !tokenMatches(
+  // 1. A token that belongs to this item's order and hasn't expired, or
+  // else the signed-in owner. The session is only looked up when there's no
+  // valid token. An unknown item gets the same 403, so the route doesn't
+  // reveal which ids exist.
+  const tokenOk =
+    item !== null &&
+    token.success &&
+    tokenMatches(
       token.data,
       item.order.downloadTokenHash,
       item.order.downloadTokenExpiresAt,
-    )
-  ) {
+    );
+  if (!item || !(tokenOk || (await isSignedInOwner(item.orderId)))) {
     return reply(403, "This download link isn't valid or has expired.");
   }
 
@@ -98,6 +103,12 @@ export async function GET(
     // may keep this redirect.
     headers: { Location: url, "Cache-Control": "no-store" },
   });
+}
+
+// The signed-in user owns the order, by the same rule as /account.
+async function isSignedInOwner(orderId: string) {
+  const user = await getCurrentUser();
+  return user !== null && (await userOwnsOrder(user, orderId));
 }
 
 function reply(status: number, message: string) {

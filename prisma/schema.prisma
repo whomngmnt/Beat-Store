@@ -51,8 +51,8 @@ enum FileType {
 }
 
 // Fields match Better Auth's core user table (name, email, emailVerified,
-// image, createdAt, updatedAt), plus our own role. Better Auth's session,
-// account and verification tables come in Phase 7.
+// image, createdAt, updatedAt), plus our own role. emailVerified comes from
+// Google's email_verified; guest orders show in /account only when it's true.
 model User {
   id            String   @id @default(uuid())
   name          String
@@ -63,7 +63,63 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  orders Order[]
+  orders   Order[]
+  sessions Session[]
+  accounts Account[]
+}
+
+// The next three tables belong to Better Auth (src/lib/auth.ts). Their
+// fields are the ones `auth generate` (Better Auth's CLI, 1.7.23) produces,
+// with our UUID ids.
+
+// One row per signed-in browser. The cookie holds the token.
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A way to sign in that belongs to a user: for v1, their Google account
+// (providerId "google", accountId = Google's user id). Better Auth also
+// saves Google's short-lived tokens here. The store never uses them.
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // unused: there are no passwords in v1
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Short-lived values Better Auth checks later, such as the OAuth state that
+// ties Google's callback to the sign-in that started it.
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Beat {
