@@ -8,3 +8,13 @@ allowBuilds:
   esbuild: false
   prisma: true
   "@prisma/engines": true
+
+# Advisories `pnpm audit` skips (the CI audit step). Each one is checked
+# by hand and comes off the list once a fix is out.
+# - GHSA-fc5q-39xc-vjpf (picomatch, high: a crafted glob pattern can take
+#   very long to match). No fixed version yet on 2026-11-18. It only comes
+#   in through the shadcn CLI, ESLint and Vitest, which match file patterns
+#   while building and testing and never see a visitor's input.
+audit:
+  ignore:
+    - GHSA-fc5q-39xc-vjpf

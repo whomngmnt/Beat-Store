@@ -10,7 +10,8 @@ Claude updates this file at the end of each task. Newest entries go first in the
   - Item 5 (legal and static pages, "TEST MODE" banner) is committed on `develop` (commit "Phase 9: legal pages, contact page and test-mode banner"), not pushed yet.
   - Item 3 (SEO: sitemap.xml, robots.txt, JSON-LD) is committed on `develop` (commit "Phase 9: sitemap, robots.txt and JSON-LD on beat pages"), not pushed yet.
   - Items 1, 2 and 4 (mobile pass, skeletons, empty states and error pages; accessibility; performance) are committed together on `develop` (commit "Phase 9: mobile pass, error pages, accessibility and performance", user's OK on 2026-11-18), not pushed yet. That includes removing the beat page's waveform and the `wavesurfer.js` package (user's choice, 2026-11-18). Lint, typecheck, 175 unit tests, 79 integration tests and `pnpm build` pass. The status-code question below was committed as Claude suggested (keep the skeletons) and can still change.
-- **Next step:** Phase 10 (testing and deploy). The user OK'd the plan on 2026-11-18: commit Phase 9 first, `main` is the branch that goes live on Vercel, and the cron jobs run once a day.
+- **Phase 10 (testing and deploy): 4 of 5 boxes ticked, committed and pushed to `develop`** (commit "Phase 10: license rule tests, CI audit, Dependabot, cron config and README", user's OK on 2026-11-18, with the 3 Phase 9 commits). Unit tests (18 new, for the license tier rules), integration tests (already there, re-run), CI audit plus Dependabot, `vercel.json` and the README with screenshots and an architecture diagram. Lint, typecheck, 193 unit tests and 79 integration tests pass. The deploy box stays open: it needs the user's Neon, R2 and Vercel accounts (README.md "Deploy").
+- **Next step:** the deploy (user said "commit and deploy", 2026-11-18). Claude opened a PR from `develop` to `main`; the user merges it, makes the Neon, R2 and Vercel accounts and enters the keys (README.md "Deploy"). Claude runs the setup scripts from `.env.deploy` and checks each step and the live site (including a Lighthouse run, OK'd on 2026-11-18).
 
 ## Open questions
 
@@ -52,7 +53,7 @@ Claude updates this file at the end of each task. Newest entries go first in the
 - **Stripe test coupons pile up.** Each checkout with a discount creates its own one-off Stripe coupon (`max_redemptions: 1`). That keeps Stripe's total equal to ours to the cent, but the Stripe test account collects one coupon per discounted checkout. Fine for test mode; revisit if it gets noisy.
 - **Replaced uploads stay in storage.** Uploading a new file for a beat saves the new key and leaves the old object where it is. Download links always use the beat's current key, so nothing points at the old file, but deleting files can't be undone, so that's left for a decision (a clean-up job is a later idea).
 - **License terms aren't snapshotted.** `OrderItem` keeps the license name and price, but not the terms or limits. Editing a tier on `/admin/licenses` changes what new buyers read; no page shows terms for a past order. The license PDF slice will need a terms snapshot on the order item.
-- **`storage:setup` on R2 (Phase 10).** The script sets CORS on both buckets the same way on R2. R2 has no bucket policies: the public bucket is made public in the Cloudflare dashboard (r2.dev or a custom domain), and `PUBLIC_CDN_URL` points there. The script prints a warning about that.
+- **`storage:setup` on R2 (Phase 10).** The script sets CORS on both buckets the same way on R2. R2 has no bucket policies: the public bucket is made public in the Cloudflare dashboard (r2.dev or a custom domain), and `PUBLIC_CDN_URL` points there. The script prints a warning about that. Setting CORS needs an R2 **Admin** token (an Object Read & Write token can't change bucket settings, per Cloudflare's docs), so the README uses a temporary admin token on the user's PC and an object-only token on Vercel. Not tried on R2 yet.
 - **Signed-in re-download not tried in a browser.** On 2026-11-17 the user skipped the test payment, so the admin account has no paid order. Downloading from `/account` without a token is covered by integration tests only (`download.test.ts`). A PENDING test order (Glass Heart Premium, $49.99, owned by the admin) is left in the local database. Its Stripe session expires 31 minutes after it was made.
 - **Google sign-in is in Testing mode.** Only the test users listed in Google Cloud (project `beat-store-dev`, Google Auth Platform → Audience) can sign in. Right now that's the admin's Google account. Before real buyers sign in (Phase 10): publish the app, add the production redirect URI `https://<domain>/api/auth/callback/google`, and check Google's current rules for apps that ask only for `openid email profile`.
 - **Better Auth is pinned to 1.7.22.** The 2026-11-14 plan note called 1.7.23 the latest, and 1.7.25 is out now. No advisory was found for 1.7.22, and `pnpm audit --audit-level=high` passes. The user asked to commit Phase 7 at 1.7.22 without deciding, so whether to bump is still open.
@@ -68,7 +69,10 @@ Claude updates this file at the end of each task. Newest entries go first in the
   - **Seen for real on 2026-11-13:** Dusty Crates stayed RESERVED for about 22 hours after its hold ran out. `stripe listen` wasn't running when Stripe sent the expired event, and the CLI doesn't replay missed events. Nothing runs the cron locally either. Resending the event freed it.
   - **In production** Stripe retries webhooks and the cron runs, so this gap is local only.
 - **`CRON_SECRET` isn't in `.env`.** Both cron routes return 401 locally until it's set. `.env.example` already has the placeholder. It wasn't added because `.env` is the user's file.
-- **Vercel Cron limits (Phase 10).** The plan runs the cron routes every 5 minutes. Check Vercel's current plan limits when deploying: the Hobby plan has allowed only daily cron jobs. No `vercel.json` yet: deploying is Phase 10.
+- **Cron jobs run once a day (decided 2026-11-18).** Vercel's Hobby plan allows only daily cron jobs, run anywhere within the hour, and a deploy with a more frequent one fails (Vercel docs, checked 2026-11-18). The user chose daily over the Pro plan. So if Stripe's `checkout.session.expired` event is lost, an exclusive can stay reserved up to a day, and a failed lost-exclusive refund is retried up to a day later. Vercel's docs now call Cron Jobs "legacy", to be migrated to a newer "Schedules" feature. `vercel.json` crons still work; revisit if Vercel announces an end date.
+- **One audit advisory is skipped on purpose (2026-11-18, user's choice).** `pnpm audit --audit-level=high` failed on GHSA-fc5q-39xc-vjpf (picomatch, high, a crafted glob pattern takes very long to match). No fixed version exists yet. It only comes in through the shadcn CLI, ESLint and Vitest (`shadcn` is a dependency only because `globals.css` imports its CSS). It's listed under `audit.ignore` in `pnpm-workspace.yaml` with the reason. Check for a fixed picomatch now and then and remove the entry; Dependabot should open the PR.
+- **The README's architecture diagram wasn't seen rendered.** It's Mermaid, which GitHub draws. Claude's attempt to render it locally (a page loading Mermaid from a CDN) was blocked by Claude Code's auto mode, and Claude didn't try another way. Look at it on GitHub after the push; a syntax mistake shows as an error box there.
+- **README screenshots are of the local demo data**: no covers, so the cards show the placeholder icon. Retake them once real covers exist. Desktop ones were taken with headless Chrome; the phone one through Chrome's device emulation (a desktop window can't be 390 px wide).
 - Known issue, set aside by the user: GitHub refuses every Actions run with "account is locked due to a billing issue", so CI shows red. Only GitHub Support can lift it. Don't investigate again unless the user asks.
 
 ## Decisions needed later
@@ -82,7 +86,28 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 
 ## Log
 
-### 2026-11-18: Phase 9 item 4, waveform removed from the beat page (built, not committed)
+### 2026-11-18: Phase 10, tests, CI, deploy prep and README (committed and pushed)
+
+The user OK'd the plan with these choices: commit Phase 9 first (done, "Phase 9: mobile pass, error pages, accessibility and performance"), `main` is the branch Vercel deploys, the cron jobs run once a day, skip the one picomatch advisory, and run Lighthouse on the live site.
+
+- **Unit tests (box 1, ticked).** Pricing, validators and token hashing already had tests. The license tier rules didn't: `cartLineProblem` in `src/lib/catalog.ts` (which license can be bought for each beat status) was reached only through the checkout integration test. It's now exported and `tests/unit/catalog.test.ts` checks all 18 cases: every tier of a published beat sells; while a checkout holds the beat only the exclusive is blocked; nothing of a sold beat or a draft sells; a license the admin turned off doesn't sell.
+- **Integration tests (box 2, ticked).** Already there from Phases 5 and 6: 20 parallel checkouts leave 1 reservation (`checkout.test.ts`), a repeated webhook and 6 at once fulfil once (`webhook.test.ts`), the 6th download gets 429 (`download.test.ts`). No new code; all 79 re-run and pass.
+- **CI (box 3, ticked).**
+  - `ci.yml`: a `pnpm audit --audit-level=high` step right after the install.
+  - `.github/dependabot.yml`: weekly update PRs for npm packages (Dependabot reads pnpm's lockfile; pnpm 12 is supported per GitHub's docs) and for GitHub Actions. PRs go to the default branch, `develop`.
+  - `pnpm-workspace.yaml`: `audit.ignore` with the one picomatch advisory and why (Open questions). The audit now passes and reports it as "1 ignored".
+  - CI still can't run on GitHub until the billing lock is lifted (known issue). Dependabot may be held up by it too.
+- **Deploy prep (box 4, open).**
+  - `vercel.json`: both cron routes at `0 4 * * *` (UTC). Vercel calls them with `GET` and `Authorization: Bearer <CRON_SECRET>`, which the routes already check. The build lists both routes as dynamic, so Vercel never gets a cached reply.
+  - Migrations run by hand from the user's PC (`prisma migrate deploy`), not in the Vercel build, so a preview build can never change the live database.
+  - Running the setup scripts against production: a gitignored `.env.deploy` plus `$env:DOTENV_PATH = ".env.deploy"` in a fresh terminal. dotenv 18 reads `DOTENV_PATH` and then skips `.env` (checked: a value only in the test file was read, and `DATABASE_URL` from `.env` wasn't). Not `.env.production.local`: `next build`/`next start` would load that one locally and point the local site at the live database.
+  - `NODE_ENV=production` in that file makes `storage:setup` leave `localhost` out of R2's CORS, as the uploads rule asks.
+  - Of the env vars the code reads, Vercel doesn't need `ADMIN_EMAIL` (seed only) or `STRIPE_PUBLISHABLE_KEY` (hosted Checkout, not read anywhere).
+- **README (box 5, ticked).** Rewritten: what the store does, stack, a Mermaid architecture diagram, local setup (including the demo audio, which isn't in git), tests and CI, and the deploy steps with the env-var table. Four screenshots in `docs/screenshots/` (home, catalog, beat page, phone), taken from `pnpm start` with the installed Chrome and a throwaway profile in the scratchpad. Nothing was installed.
+- PLAN.md: §5.2 says the cron runs once a day (Hobby limit, user's choice) instead of every 5 minutes; §6 lists `vercel.json`, `pnpm-workspace.yaml`, `docs/screenshots/`, `dependabot.yml` and `catalog.test.ts`; §8 boxes 1, 2, 3 and 5 ticked, the deploy box notes `main` and the README steps.
+- Checks: lint, typecheck, 193 unit tests, 79 integration tests, `pnpm build` and `pnpm audit --audit-level=high` pass. Prettier is clean.
+
+### 2026-11-18: Phase 9 item 4, waveform removed from the beat page (committed, not pushed)
 
 Lighthouse showed that the beat page's waveform downloaded the whole 1.4 MB preview and decoded it in the browser on every visit, just to draw the bars. On a phone that's about 1 s of work before taps respond. Claude suggested saving the peaks at upload. Because ffmpeg isn't on Vercel, that meant computing them in the admin's browser or adding a decoder package. The user chose to remove the waveform instead, knowing it changes PLAN.md, and OK'd the file list.
 
@@ -111,7 +136,7 @@ Lighthouse showed that the beat page's waveform downloaded the whole 1.4 MB prev
   - This PC was less busy than in the earlier runs (see Open questions), so the before/after gap is partly the machine. The waveform's own cost (the 1.4 MB download and the decoding) is gone for certain.
 - **Checks:** lint, typecheck, Prettier, 175 unit tests (177 minus the 2 `startAt` tests) and `pnpm build` pass. Integration tests weren't re-run: nothing they cover changed.
 
-### 2026-11-18: Phase 9 items 2 and 4, accessibility and performance (built, not committed)
+### 2026-11-18: Phase 9 items 2 and 4, accessibility and performance (committed, not pushed)
 
 The user asked for "2 and 4 from phase 9" and OK'd the plan, including a one-off `pnpm dlx lighthouse@13.6.0` (not added to `package.json`).
 
@@ -139,7 +164,7 @@ The user asked for "2 and 4 from phase 9" and OK'd the plan, including a one-off
   - At this point mobile performance was under 90 on the beat page and home, so the user chose to remove the waveform (next entry up), which has the final scores.
 - **Checks:** lint, typecheck, Prettier, 177 unit tests, 79 integration tests and `pnpm build` pass.
 
-### 2026-11-18: Phase 9 item 1, mobile pass, skeletons, empty states, error pages (built, not committed)
+### 2026-11-18: Phase 9 item 1, mobile pass, skeletons, empty states, error pages (committed, not pushed)
 
 The user asked for "phase 9 part 1" and OK'd the plan, including starting Docker Desktop.
 
@@ -1056,6 +1081,7 @@ Decisions:
 ## Up next
 
 - [ ] Decide whether to bump Better Auth from 1.7.22 (see Open questions).
-- [ ] Push the Phase 9 item 5 commit when the user says so. Open `/licenses` once with Docker running.
-- [ ] Swap the placeholder contact values in `.env` for real ones once the accounts exist (and set them on Vercel in Phase 10).
-- [ ] Phase 9 items 1–4 (mobile and error pages, accessibility, SEO, performance), one at a time, plan first.
+- [ ] The user merges the PR from `develop` to `main` (Claude never merges into `main`).
+- [ ] Deploy (PLAN.md §8 Phase 10 box 4, README.md "Deploy"): the user makes the Neon, R2 and Vercel accounts and enters every key; Claude checks each step. Then: Neon's time zone is UTC, a real R2 download, the live site's pages, previews, sitemap, cron routes refuse without the secret, Lighthouse, Google's Rich Results Test. The user does the `4242…` checkout on the live site (PLAN.md §10 step 14).
+- [ ] Tick the Phase 5 accounts box (R2 and Neon) once they exist.
+- [ ] Swap the placeholder contact values in `.env` for real ones once the accounts exist (and set them on Vercel).

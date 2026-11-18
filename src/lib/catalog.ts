@@ -332,7 +332,8 @@ export async function getCartLines(items: CartItem[]): Promise<CartLine[]> {
 // PUBLISHED or RESERVED and this license is on sale. Checked line by line
 // here, so the cart can say why a line can't be bought. While a checkout
 // holds a beat, only its exclusive is blocked (.claude/rules/exclusives.md).
-function cartLineProblem(row: {
+// Exported for its unit test (tests/unit/catalog.test.ts).
+export function cartLineProblem(row: {
   active: boolean;
   beat: { status: BeatStatus };
   licenseTier: { code: LicenseCode };

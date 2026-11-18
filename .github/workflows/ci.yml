@@ -22,6 +22,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Fails on any high or critical advisory in a dependency, e.g. a
+      # vulnerable Next.js or Better Auth version. Advisories checked and
+      # skipped on purpose are listed in pnpm-workspace.yaml (audit.ignore).
+      - run: pnpm audit --audit-level=high
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

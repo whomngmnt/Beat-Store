@@ -167,7 +167,7 @@ Key rules:
    - automatic refund (`stripe.refunds.create` with idempotency key `refund-<orderItemId>`) for any lost exclusive, plus an apology email once the email slice exists
    - later slice (PDF): generate license PDFs, upload them, set `licensePdfKey`
    - later slice (email): send the receipt email, then set `emailSentAt`
-   - If any step fails, it's retried by a job (Vercel Cron every 5 min: `PAID AND (emailSentAt IS NULL OR PDFs missing)`). The webhook still returns 200, because the payment is already recorded.
+   - If any step fails, it's retried by a job (Vercel Cron: `PAID AND (emailSentAt IS NULL OR PDFs missing)`). The webhook still returns 200, because the payment is already recorded. The jobs run once a day (`vercel.json`, 04:00 UTC), the most Vercel's free Hobby plan allows (user's choice, 2026-11-18). Every 5 minutes would need the Pro plan.
 8. The **success page always shows the downloads**. It looks the order up by `session_id`, retrieves the session from Stripe on the server, and if the webhook hasn't arrived yet it **runs the same idempotent fulfilment function itself**. Delivery therefore never depends on email. It also shows the guest download link, so the buyer can bookmark it.
 9. `checkout.session.expired` releases the reservations (`status = PUBLISHED, reservedByOrderId = null WHERE reservedByOrderId = order.id`) and sets the order to EXPIRED. A cron job also releases any reservation past `reservedUntil` in case the event is lost.
 10. `charge.refunded` sets the order to REFUNDED and disables downloads. If the order included an exclusive, the admin decides whether to re-list the beat.
@@ -218,7 +218,10 @@ Claude-code-project/
 ├─ README.md
 ├─ .env.example
 ├─ docker-compose.yml            # local Postgres + S3 storage (SeaweedFS)
+├─ vercel.json                   # the 2 cron jobs, once a day (Hobby plan)
+├─ pnpm-workspace.yaml           # which packages may run install scripts; advisories `pnpm audit` skips
 ├─ vitest.config.mts             # reads the @/ import alias from tsconfig.json
+├─ docs/screenshots/             # pictures for the README
 ├─ prisma/
 │  ├─ schema.prisma
 │  ├─ migrations/
@@ -290,10 +293,10 @@ Claude-code-project/
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
 │  └─ emails/OrderReceipt.tsx    # later slice (Resend)
 ├─ tests/
-│  ├─ unit/pricing.test.ts, validators.test.ts, fulfilment.test.ts, stripe.test.ts, tokens.test.ts, storage.test.ts, …
+│  ├─ unit/pricing.test.ts, validators.test.ts, catalog.test.ts, fulfilment.test.ts, stripe.test.ts, tokens.test.ts, storage.test.ts, …
 │  ├─ integration/checkout.test.ts, webhook.test.ts, cron.test.ts, download.test.ts, account.test.ts, admin-*.test.ts   # real Postgres: pnpm test:integration
 │  └─ e2e/browse.spec.ts, checkout.spec.ts, admin.spec.ts   # later slice (Playwright)
-└─ .github/workflows/ci.yml
+└─ .github/workflows/ci.yml, .github/dependabot.yml
 ```
 
 ---
@@ -413,11 +416,11 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 10: Testing & deploy (days 30–32)
 
-- [ ] Vitest unit tests (pricing, validators, license tier rules, token hashing)
-- [ ] Integration tests against a real Postgres: reservation race, duplicate and concurrent webhook delivery, download limit
-- [ ] CI: `pnpm audit --audit-level=high` (plus Dependabot) so vulnerable Next.js/Better Auth versions fail the build
-- [ ] Deploy to Vercel; Neon DB (`prisma migrate deploy`); R2 buckets plus CORS; production webhook endpoint in the Stripe dashboard (test mode)
-- [ ] README with setup steps, screenshots, architecture diagram
+- [x] Vitest unit tests (pricing, validators, license tier rules, token hashing)
+- [x] Integration tests against a real Postgres: reservation race, duplicate and concurrent webhook delivery, download limit
+- [x] CI: `pnpm audit --audit-level=high` (plus Dependabot) so vulnerable Next.js/Better Auth versions fail the build
+- [ ] Deploy to Vercel; Neon DB (`prisma migrate deploy`); R2 buckets plus CORS; production webhook endpoint in the Stripe dashboard (test mode). `main` is the production branch (user's choice, 2026-11-18); `vercel.json` runs the crons once a day. Steps in README.md "Deploy".
+- [x] README with setup steps, screenshots, architecture diagram
 
 ### Later slices (after v1)
 

@@ -1,0 +1,16 @@
+# Dependabot opens a pull request when a dependency or a GitHub Action has a
+# new version. The PRs go to the default branch, develop, and are reviewed
+# like any other change. Security alerts and fixes are switched on in the
+# repo's GitHub settings, not here.
+version: 2
+updates:
+  # "npm" covers pnpm too: Dependabot reads pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
