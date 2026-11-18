@@ -5,7 +5,6 @@ import { AudioLines } from "lucide-react";
 import { LicenseSelector } from "@/components/beats/LicenseSelector";
 import { LicenseTable } from "@/components/beats/LicenseTable";
 import { PlayButton } from "@/components/player/PlayButton";
-import { Waveform } from "@/components/player/Waveform";
 import { badgeVariants } from "@/components/ui/badge";
 import { getBeatBySlug } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
@@ -75,12 +74,15 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
             table below. */}
         <div className="relative flex aspect-square items-center justify-center self-start overflow-hidden rounded-xl bg-muted">
           {beat.coverKey ? (
-            // Not optimized yet: Phase 9 turns on next/image's resizing.
+            // A resized copy: the cover is the full width on a phone and
+            // 2/5 of the row (md:grid-cols-[2fr_3fr]) from md up. It's the
+            // biggest thing on screen, so `preload` fetches it first.
             <Image
               src={publicUrl(beat.coverKey)}
               alt=""
               fill
-              unoptimized
+              sizes="(min-width: 768px) 40vw, 100vw"
+              preload
               className="object-cover"
             />
           ) : (
@@ -113,12 +115,12 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
             </ul>
           </div>
 
-          {/* The queue is just this beat, so Next is off in the player bar. */}
+          {/* The queue is just this beat, so Next is off in the player bar.
+              No waveform: drawing one meant downloading and decoding the
+              whole preview on every visit, which slowed phones down
+              (Phase 9). The player bar's slider seeks. */}
           {track && (
-            <div className="flex items-center gap-4">
-              <PlayButton queue={[track]} index={0} className="size-12" />
-              <Waveform track={track} className="h-16 min-w-0 flex-1" />
-            </div>
+            <PlayButton queue={[track]} index={0} className="size-12" />
           )}
 
           {/* Plain text: React escapes it, and line breaks stay visible. */}

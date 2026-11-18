@@ -23,7 +23,7 @@ Online store for type beats: a catalog with watermarked previews, 4 license tier
 
 ## Stack
 
-Next.js 16 (latest 16.x, App Router, `src/` dir) + TypeScript · pnpm · Tailwind + shadcn/ui · Zustand · wavesurfer.js · PostgreSQL (Docker locally, Neon hosted) · Prisma · Better Auth (Google sign-in) · Cloudflare R2 (S3 API; SeaweedFS in Docker locally) · Stripe Checkout + webhooks · Zod · Vitest · ffmpeg · Vercel · GitHub Actions.
+Next.js 16 (latest 16.x, App Router, `src/` dir) + TypeScript · pnpm · Tailwind + shadcn/ui · Zustand · PostgreSQL (Docker locally, Neon hosted) · Prisma · Better Auth (Google sign-in) · Cloudflare R2 (S3 API; SeaweedFS in Docker locally) · Stripe Checkout + webhooks · Zod · Vitest · ffmpeg · Vercel · GitHub Actions.
 
 **Later slices, not in v1:** Resend + React Email (receipt email, magic-link sign-in), @react-pdf/renderer (license PDF), Playwright (E2E tests), Upstash (rate limiting). Don't install or build these until the user starts that slice. PLAN.md §1 "Out of scope" and §8 "Later ideas" are out of v1 too.
 

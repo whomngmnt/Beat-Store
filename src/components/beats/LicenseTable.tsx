@@ -11,7 +11,11 @@ export function LicenseTable({ licenses }: { licenses: BeatDetailLicense[] }) {
   const tiers = licenses.map((license) => license.licenseTier);
 
   return (
-    <div className="overflow-x-auto rounded-xl border">
+    // On a phone the table is wider than the screen and scrolls sideways
+    // inside this box. `relative` keeps the sr-only labels (which are
+    // position: absolute) inside it too: without it they stick out and the
+    // whole page scrolls sideways.
+    <div className="relative overflow-x-auto rounded-xl border">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b">

@@ -6,11 +6,17 @@
 //
 // A server action can be called by anyone who finds it, so each one calls
 // requireAdmin() before anything else and checks its input with Zod.
-import { refresh } from "next/cache";
+//
+// After a change, refresh() reloads the admin page, and
+// updateTag(CATALOG_TAG) clears the store's cached lists, so the change
+// shows there at once too (src/lib/catalog.ts). createBeat doesn't need
+// it: a new beat is a draft, which no list shows.
+import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma, type BeatStatus } from "@/generated/prisma/client";
 import { requireAdmin } from "@/lib/auth-guards";
+import { CATALOG_TAG } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import {
   FILE_KINDS,
@@ -120,6 +126,7 @@ export async function updateBeat(
     if (isSlugTaken(error)) return slugTaken;
     throw error;
   }
+  updateTag(CATALOG_TAG);
   refresh();
   return { ok: true, message: "Saved." };
 }
@@ -198,6 +205,7 @@ export async function setBeatStatus(
           : `This beat is already ${beat.status}.`,
     };
   }
+  updateTag(CATALOG_TAG);
   refresh();
   return { ok: true, message: `The beat is now ${status}.` };
 }
@@ -254,6 +262,7 @@ export async function updateBeatPrices(
       }),
     ),
   );
+  updateTag(CATALOG_TAG);
   refresh();
   return { ok: true, message: "Prices saved." };
 }
@@ -291,6 +300,7 @@ export async function attachBeatFile(
     data: { [rule.column]: input.data.key },
   });
   if (count === 0) return notFound;
+  updateTag(CATALOG_TAG);
   refresh();
   return { ok: true, message: `The ${rule.label} is saved.` };
 }

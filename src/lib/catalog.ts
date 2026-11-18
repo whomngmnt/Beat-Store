@@ -1,5 +1,6 @@
 // Catalog queries for /beats, /beats/[slug] and the cart. Input comes in
 // already checked by the Zod schemas in src/lib/validators.ts.
+import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import type {
   BeatStatus,
@@ -11,6 +12,19 @@ import { db } from "@/lib/db";
 import { beatSlugSchema, type CatalogFilters } from "@/lib/validators";
 
 export const CATALOG_PAGE_SIZE = 9;
+
+// The catalog lists (catalog page, filter choices, home page lists,
+// sitemap) are cached across requests and visitors for 60 s, in Next.js's
+// data cache (unstable_cache), so most visits don't touch the database.
+// - Admin changes show at once: the actions in src/actions/beats.ts call
+//   updateTag(CATALOG_TAG).
+// - A checkout reserving or selling a beat, and plays, don't refresh it, so
+//   a list can be up to 60 s behind. That's only what's shown: the beat
+//   page, the cart and checkout aren't cached and read the database.
+// unstable_cache returns JSON-able data only, which is why none of these
+// select a date.
+export const CATALOG_TAG = "catalog";
+const catalogCache = { tags: [CATALOG_TAG], revalidate: 60 };
 
 // What a BeatCard needs. `licenses` holds only the cheapest active license,
 // which is the card's "From" price. `previewKey` and `coverKey` are keys in
@@ -77,26 +91,31 @@ const orderBy = {
   popular: [{ plays: "desc" }, { id: "asc" }],
 } satisfies Record<string, Prisma.BeatOrderByWithRelationInput[]>;
 
-export async function getCatalogPage(filters: CatalogFilters) {
-  const where = catalogWhere(filters);
-  const skip = (filters.page - 1) * CATALOG_PAGE_SIZE;
-  const { sort } = filters;
+// Cached per set of filters: they're part of the cache key.
+export const getCatalogPage = unstable_cache(
+  async (filters: CatalogFilters) => {
+    const where = catalogWhere(filters);
+    const skip = (filters.page - 1) * CATALOG_PAGE_SIZE;
+    const { sort } = filters;
 
-  const [total, beats] = await Promise.all([
-    db.beat.count({ where }),
-    sort === "newest" || sort === "popular"
-      ? db.beat.findMany({
-          where,
-          select: beatCardSelect,
-          orderBy: orderBy[sort],
-          skip,
-          take: CATALOG_PAGE_SIZE,
-        })
-      : getBeatsByPrice(where, sort === "price-asc" ? "asc" : "desc", skip),
-  ]);
+    const [total, beats] = await Promise.all([
+      db.beat.count({ where }),
+      sort === "newest" || sort === "popular"
+        ? db.beat.findMany({
+            where,
+            select: beatCardSelect,
+            orderBy: orderBy[sort],
+            skip,
+            take: CATALOG_PAGE_SIZE,
+          })
+        : getBeatsByPrice(where, sort === "price-asc" ? "asc" : "desc", skip),
+    ]);
 
-  return { beats, total, totalPages: Math.ceil(total / CATALOG_PAGE_SIZE) };
-}
+    return { beats, total, totalPages: Math.ceil(total / CATALOG_PAGE_SIZE) };
+  },
+  ["catalog-page"],
+  catalogCache,
+);
 
 // Prisma can't sort beats by their cheapest license. So group the active
 // licenses by beat to get each beat's lowest price, sort and page those
@@ -124,48 +143,61 @@ async function getBeatsByPrice(
 }
 
 // Home page: up to 3 beats the admin marked as featured, newest first.
-export async function getFeaturedBeats() {
-  return db.beat.findMany({
-    where: { ...catalogWhere({}), featured: true },
-    select: beatCardSelect,
-    orderBy: orderBy.newest,
-    take: 3,
-  });
-}
+export const getFeaturedBeats = unstable_cache(
+  async () =>
+    db.beat.findMany({
+      where: { ...catalogWhere({}), featured: true },
+      select: beatCardSelect,
+      orderBy: orderBy.newest,
+      take: 3,
+    }),
+  ["featured-beats"],
+  catalogCache,
+);
 
 // Home page: the 6 newest beats on show.
-export async function getNewestBeats() {
-  return db.beat.findMany({
-    where: catalogWhere({}),
-    select: beatCardSelect,
-    orderBy: orderBy.newest,
-    take: 6,
-  });
-}
+export const getNewestBeats = unstable_cache(
+  async () =>
+    db.beat.findMany({
+      where: catalogWhere({}),
+      select: beatCardSelect,
+      orderBy: orderBy.newest,
+      take: 6,
+    }),
+  ["newest-beats"],
+  catalogCache,
+);
 
 // sitemap.xml: the slug of every beat on show, newest first. Drafts and
 // sold beats are left out by the same rule as /beats.
-export async function getSitemapBeats() {
-  return db.beat.findMany({
-    where: catalogWhere({}),
-    select: { slug: true },
-    orderBy: orderBy.newest,
-  });
-}
+export const getSitemapBeats = unstable_cache(
+  async () =>
+    db.beat.findMany({
+      where: catalogWhere({}),
+      select: { slug: true },
+      orderBy: orderBy.newest,
+    }),
+  ["sitemap-beats"],
+  catalogCache,
+);
 
 // Dropdown choices: the genres, moods and keys of the beats on show.
-export async function getFilterOptions() {
-  const beats = await db.beat.findMany({
-    where: catalogWhere({}),
-    select: { genre: true, mood: true, musicalKey: true },
-  });
-  const unique = (values: string[]) => [...new Set(values)].sort();
-  return {
-    genres: unique(beats.map((beat) => beat.genre)),
-    moods: unique(beats.map((beat) => beat.mood)),
-    keys: unique(beats.map((beat) => beat.musicalKey)),
-  };
-}
+export const getFilterOptions = unstable_cache(
+  async () => {
+    const beats = await db.beat.findMany({
+      where: catalogWhere({}),
+      select: { genre: true, mood: true, musicalKey: true },
+    });
+    const unique = (values: string[]) => [...new Set(values)].sort();
+    return {
+      genres: unique(beats.map((beat) => beat.genre)),
+      moods: unique(beats.map((beat) => beat.mood)),
+      keys: unique(beats.map((beat) => beat.musicalKey)),
+    };
+  },
+  ["filter-options"],
+  catalogCache,
+);
 
 export type FilterOptions = Awaited<ReturnType<typeof getFilterOptions>>;
 

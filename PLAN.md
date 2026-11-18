@@ -29,7 +29,7 @@ The project covers the full stack: **frontend, backend, database, file storage a
 | ---------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Framework        | **Next.js 16 (latest 16.x, App Router) + TypeScript**                                | One codebase for the frontend and backend (Route Handlers / Server Actions), good SEO for beat pages |
 | Styling/UI       | **Tailwind CSS + shadcn/ui**                                                         | Fast, consistent dark "studio" look                                                                  |
-| Audio            | **wavesurfer.js** (waveform) + a global `<audio>` player kept in a **Zustand** store | Persistent player bar, waveform display                                                              |
+| Audio            | A global `<audio>` player kept in a **Zustand** store                                | Persistent player bar with seek and volume                                                           |
 | Database         | **PostgreSQL** (local via Docker, hosted on **Neon** or **Supabase**)                | Relational data: beats, licenses, orders                                                             |
 | ORM              | **Prisma**                                                                           | Type-safe queries, migrations, seeding                                                               |
 | Auth             | **Better Auth**: Google sign-in in v1 (magic link later); `role` field for admin     | Simple and secure; Auth.js is now in maintenance mode                                                |
@@ -52,7 +52,7 @@ The project covers the full stack: **frontend, backend, database, file storage a
 
 1. **Home**: hero section, featured beats, newest beats, genre/"type" tags (e.g. "Travis Scott type", "Drill", "Lo-fi")
 2. **Catalog `/beats`**: grid/list view, search by title/tag, filters (genre, mood, BPM range, key, price), sort (newest, popular, price), pagination
-3. **Beat page `/beats/[slug]`**: cover art, waveform player, BPM/key/tags, license tier selector with a "what's included" comparison table, "Add to cart", similar beats
+3. **Beat page `/beats/[slug]`**: cover art, a play button (the player bar seeks), BPM/key/tags, license tier selector with a "what's included" comparison table, "Add to cart", similar beats
 4. **Global player bar**: play/pause, seek, next/prev, volume. It stays across page navigation and has a queue built from the current list.
 5. **Cart**: drawer plus `/cart` page, one license per beat line, totals. The cart in localStorage holds only beat and tier ids, never a price: prices and totals always come from the server.
 6. **Checkout**: redirect to Stripe Checkout (test mode), then a `/checkout/success` page
@@ -233,6 +233,8 @@ Claude-code-project/
 ├─ src/
 │  ├─ app/
 │  │  ├─ (store)/layout.tsx      # header + footer (store pages only, not admin)
+│  │  ├─ (store)/loading.tsx, error.tsx, not-found.tsx   # skeleton, error page and 404 inside the store frame
+│  │  ├─ (store)/beats/loading.tsx, (store)/beats/[slug]/loading.tsx   # skeletons in each page's layout
 │  │  ├─ (store)/page.tsx        # home
 │  │  ├─ (store)/beats/page.tsx
 │  │  ├─ (store)/beats/[slug]/page.tsx
@@ -243,6 +245,7 @@ Claude-code-project/
 │  │  ├─ (store)/account/page.tsx
 │  │  ├─ (store)/licenses|faq|contact|terms|privacy/page.tsx
 │  │  ├─ admin/layout.tsx        # requireAdmin() + admin nav
+│  │  ├─ admin/loading.tsx, admin/error.tsx   # skeleton and error page inside the admin nav
 │  │  ├─ admin/page.tsx          # dashboard
 │  │  ├─ admin/(beats|beats/new|beats/[id]|orders|orders/[id]|licenses|coupons)/page.tsx
 │  │  ├─ api/webhooks/stripe/route.ts
@@ -251,12 +254,14 @@ Claude-code-project/
 │  │  ├─ api/auth/[...all]/route.ts              # Better Auth handler
 │  │  ├─ api/cron/fulfilment-retry/route.ts      # retry post-commit side effects: refunds (emails/PDFs in later slices), CRON_SECRET protected
 │  │  ├─ api/cron/release-reservations/route.ts  # free expired exclusive reservations
+│  │  ├─ not-found.tsx           # 404 for URLs that match no page
 │  │  ├─ sitemap.ts              # /sitemap.xml: static pages + every beat on show
 │  │  ├─ robots.ts               # /robots.txt: everything but /admin and /api/
+│  │  ├─ icon.svg                # browser tab icon (Next.js adds the <link>)
 │  │  └─ layout.tsx              # root: <html class="dark">, fonts; includes <PlayerBar/>
 │  ├─ components/
-│  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
-│  │  ├─ player/PlayerBar.tsx, PlayButton.tsx, Waveform.tsx
+│  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx, SkipLink.tsx   # SkipLink: "Skip to content", first Tab stop in both layouts
+│  │  ├─ player/PlayerBar.tsx, PlayButton.tsx
 │  │  ├─ beats/BeatCard.tsx, BeatGrid.tsx, BeatFilters.tsx, LicenseSelector.tsx, LicenseTable.tsx
 │  │  ├─ cart/CartButton.tsx, CartDrawer.tsx, CartContents.tsx, CheckoutButton.tsx, ClearCart.tsx
 │  │  ├─ admin/                  # admin forms, labels, upload, CSS bar charts
@@ -348,7 +353,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 - [x] Zustand `player` store (current track, queue, isPlaying, progress)
 - [x] `PlayerBar` in the root layout using a single `<audio>` element
-- [x] `Waveform` with wavesurfer.js on the beat page, synced to the global player
+- [x] `Waveform` with wavesurfer.js on the beat page, synced to the global player (removed in Phase 9 on 2026-11-18, user's choice: it downloaded and decoded the whole preview on every visit, which slowed phones down)
 - [x] Increment `plays` (debounced, server action) after 10s of listening
 - [x] Install ffmpeg
 - [x] `scripts/make-preview.ts` ffmpeg pipeline
@@ -400,10 +405,10 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 ### Phase 9: Polish (days 27–29)
 
-- [ ] Responsive/mobile pass, loading skeletons, empty states, error boundaries
-- [ ] Accessibility: keyboard-controllable player, aria labels, contrast
+- [x] Responsive/mobile pass, loading skeletons, empty states, error boundaries
+- [x] Accessibility: keyboard-controllable player, aria labels, contrast
 - [x] SEO: sitemap.xml, robots.txt, JSON-LD (Product/MusicRecording)
-- [ ] Performance: `next/image`, caching of catalog queries, Lighthouse ≥ 90
+- [x] Performance: `next/image`, caching of catalog queries, Lighthouse ≥ 90
 - [x] Legal/static pages and a "TEST MODE — no real payments" banner
 
 ### Phase 10: Testing & deploy (days 30–32)
@@ -467,7 +472,7 @@ Make-an-offer for exclusives, Stripe Connect, PayPal, beat bundles and packs, a 
 ## 10. Verification (definition of done)
 
 1. `docker compose up -d && pnpm prisma migrate dev && pnpm db:seed && pnpm dev`, then the catalog shows 12 demo beats
-2. Previews play, the player bar keeps playing across page navigation, and the waveform seeks correctly
+2. Previews play, the player bar keeps playing across page navigation, and its seek slider works
 3. Add Basic + Exclusive to the cart, check out with `4242…`, and land on the success page. The order is PAID in the DB, MP3/WAV/stems download, and the exclusive beat now shows SOLD. (With the email and PDF slices, the email also arrives and the PDF downloads.)
 4. The decline card `4000 0000 0000 9995` leaves the order PENDING/FAILED with no downloads
 5. Replay the webhook with `stripe events resend <id>`, and also send two deliveries at the same time. Exactly one fulfilment happens.

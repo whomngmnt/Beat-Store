@@ -6,16 +6,35 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 - **Stage:** Phase 8 (admin panel) is built and every Phase 8 box is ticked. It is committed and pushed to `develop` (commit "Phase 8: admin panel, uploads, license tiers, dashboard and coupons"). Lint, typecheck, 169 unit tests and 79 integration tests pass. Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to the Phase 8 commit is pushed to `origin/develop`.
-- **Phase 9 (polish), in progress:** items 3 and 5 are done and ticked.
+- **Phase 9 (polish): all 5 items are done and ticked.**
   - Item 5 (legal and static pages, "TEST MODE" banner) is committed on `develop` (commit "Phase 9: legal pages, contact page and test-mode banner"), not pushed yet.
-  - Item 3 (SEO: sitemap.xml, robots.txt, JSON-LD) is committed on `develop` (commit "Phase 9: sitemap, robots.txt and JSON-LD on beat pages"), not pushed yet. Lint, typecheck, 176 unit tests and `pnpm build` pass.
-  - Items 1, 2 and 4 are open.
-- **Next step:** the next Phase 9 item, plan first.
+  - Item 3 (SEO: sitemap.xml, robots.txt, JSON-LD) is committed on `develop` (commit "Phase 9: sitemap, robots.txt and JSON-LD on beat pages"), not pushed yet.
+  - Items 1, 2 and 4 (mobile pass, skeletons, empty states and error pages; accessibility; performance) are committed together on `develop` (commit "Phase 9: mobile pass, error pages, accessibility and performance", user's OK on 2026-11-18), not pushed yet. That includes removing the beat page's waveform and the `wavesurfer.js` package (user's choice, 2026-11-18). Lint, typecheck, 175 unit tests, 79 integration tests and `pnpm build` pass. The status-code question below was committed as Claude suggested (keep the skeletons) and can still change.
+- **Next step:** Phase 10 (testing and deploy). The user OK'd the plan on 2026-11-18: commit Phase 9 first, `main` is the branch that goes live on Vercel, and the cron jobs run once a day.
 
 ## Open questions
 
+- **Lighthouse scores depend on how busy this PC is.** The final runs (log, 2026-11-18, waveform removed) give 94–100 for mobile performance on all three pages. Earlier runs, while the PC was busier, gave 78–90 for home with no change to its code. Lighthouse's own CPU speed measure for the machine was 379–1182 then and 1496–2030 for the final runs. If a later run on a busy PC dips under 90, run it again before changing code. Phase 10's deployed site is the better place to measure.
+- **The beat page's meta description arrives in `<body>`.** Lighthouse SEO says "Document does not have a meta description" (91). The tag is there, but after `</head>`. `generateMetadata` reads the database, and Next.js 16 streams metadata to browsers. It holds the page back for metadata only for HTML-only bots, the `htmlLimitedBots` list. Next.js says this is fine for Googlebot, which runs JavaScript. Not changed. If wanted: `htmlLimitedBots: /.*/` in `next.config.ts` puts metadata in `<head>` for everyone, at the cost of a later first paint. Claude didn't check whether this started before item 1's skeletons.
+- **No cover image seen through `next/image` yet.** No beat in the local database has a cover (11 published, 1 sold, 0 covers). Checked by asking the optimizer directly on `pnpm start`:
+  - a storage URL passes `remotePatterns`;
+  - a foreign URL (`example.org`) is refused by the pattern;
+  - the storage URL is then refused because `localhost` is a private IP. `dangerouslyAllowLocalIP` is on only in dev, so locally covers show on `pnpm dev` but not on `pnpm start`. On Vercel the R2 public URL isn't a private IP.
+  - To see one: upload a cover in `/admin` on `pnpm dev`, then look at the card and the beat page.
+- **A localhost tab may keep reloading in the user's Chrome.** During this task the dev server got `GET /beats/first-light` about once a second from a Chrome tab outside Claude's tab group. A recompile followed each request. Cause not found; the guess is that the dev server's own log and trace writes set off reloads. Claude stopped the dev server. If a `localhost:3000` tab keeps reloading the next time `pnpm dev` runs, close it.
+- **Status codes after a skeleton (decision for the user, 2026-11-18).** With a `loading.tsx` above a page, Next.js sends the skeleton with status 200 first, so the status can't change afterwards (Next.js docs, loading.js "Status codes").
+  - A missing or draft beat (`/beats/<bad-slug>`) still shows the 404 page and gets `<meta name="robots" content="noindex">`, but the status is 200, not 404.
+  - `/account` signed out still goes to `/sign-in`, but as a redirect done in the page, not an HTTP 307.
+  - Admin pages keep the real 307: `requireAdmin()` runs in the admin layout, above `admin/loading.tsx`.
+  - Unknown URLs (`/nope`) still return a real 404.
+  - Nothing in PLAN.md or the tests depends on these codes. Buyers see the same pages, and `noindex` keeps missing beats out of search.
+  - Claude's suggestion: keep it. The other way is to drop the `(store)` and `/beats` skeletons, or move the catalog page into its own route group, so the beat page and `/account` render fully before sending a status.
+- **Mobile pass: not seen in a browser.**
+  - `/account`: Chrome wasn't signed in, so it went to `/sign-in`. Its header stacks on phones from the code only.
+  - The admin pages: the user's earlier choice. The nav wrap and the "No beats yet" message are from the code only.
+  - `/checkout/success`: needs a real order.
+- **Docker Desktop is now running** (Claude started it on 2026-11-18 with the user's OK), with `docker compose up -d`. So `/sitemap.xml`, `/licenses` and a beat page's JSON-LD can be checked now. They weren't checked in this task.
 - **`/sitemap.xml` and the beat page's JSON-LD not seen running yet.** Docker was off on 2026-11-18, so on the dev server only `/robots.txt` loaded (200, right content). `/sitemap.xml` gave 500 because Postgres refused the connection. Both need `docker compose up -d`. Then also paste a beat page's URL into Google's Rich Results Test or validator.schema.org once the site is deployed (Phase 10): neither can reach localhost.
-- **`/licenses` not seen in a browser yet.** Docker wasn't running on 2026-11-18, so only `/faq`, `/terms`, `/privacy` and `/contact` were loaded (all 200, banner shown). `/licenses` reads the tiers from the database and needs `docker compose up -d`.
 - **Contact details are placeholders.** The user doesn't have the accounts yet (2026-11-18). Their local `.env` now has `CONTACT_EMAIL=contact@example.com` and `your-name` links for Instagram, TikTok and YouTube, to swap for real ones later. `.env.example` keeps them empty. Where they're empty (e.g. on Vercel until set), `/contact` says "Contact details aren't set up yet". The page has no dynamic code, so `next build` bakes the values in: on Vercel, changing one needs a redeploy.
 - **Terms and privacy text is Claude's plain-English summary, not legal text.** Fine while the store is test mode only. It needs a real review before live mode (v2). The privacy page lists only what the code stores today; the email and PDF slices must update it.
 
@@ -62,6 +81,99 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-18: Phase 9 item 4, waveform removed from the beat page (built, not committed)
+
+Lighthouse showed that the beat page's waveform downloaded the whole 1.4 MB preview and decoded it in the browser on every visit, just to draw the bars. On a phone that's about 1 s of work before taps respond. Claude suggested saving the peaks at upload. Because ffmpeg isn't on Vercel, that meant computing them in the admin's browser or adding a decoder package. The user chose to remove the waveform instead, knowing it changes PLAN.md, and OK'd the file list.
+
+- **Removed:**
+  - `src/components/player/Waveform.tsx`.
+  - The `wavesurfer.js` package (`pnpm remove`). The lockfile only lost its own lines.
+  - `playQueue`'s `startAt` option in `src/store/player.ts`, with its 2 tests. Only the waveform's "click a spot to start there" used it.
+- **Beat page:** the big Play button stands alone. A comment says why there's no waveform. Seeking is in the player bar. The skeleton's 64 px waveform row is now a Play-button-sized block.
+- **Docs:**
+  - `CLAUDE.md`: Stack line without wavesurfer.js.
+  - PLAN.md: §2 Audio row, §3 beat page ("a play button"), §6 player folder, §10 manual test 2 ("its seek slider works"). The Phase 3 Waveform box stays ticked, with a removal note.
+  - §8 item 4 ticked.
+- **Seen in Chrome** (production build): the page has no drawing and no console errors. The MP3 is requested only by the player's `<audio>` after Play is pressed, and Play works from the keyboard.
+- **Lighthouse 13.6.0**, production build, all runs in the same session:
+
+  | Page | Mobile performance (3 runs) | Median |
+  |---|---|---|
+  | Home | 99 / 100 / 99 | 99 |
+  | `/beats` | 97 / 100 / 99 | 99 |
+  | Beat page | 100 / 94 / 99 | 99 |
+
+  - Beat page on desktop: 100.
+  - Accessibility and best practices: 100 on every run.
+  - SEO: 100, except 91 on the beat page (meta description, see Open questions).
+  - No MP3 request on page load.
+  - This PC was less busy than in the earlier runs (see Open questions), so the before/after gap is partly the machine. The waveform's own cost (the 1.4 MB download and the decoding) is gone for certain.
+- **Checks:** lint, typecheck, Prettier, 175 unit tests (177 minus the 2 `startAt` tests) and `pnpm build` pass. Integration tests weren't re-run: nothing they cover changed.
+
+### 2026-11-18: Phase 9 items 2 and 4, accessibility and performance (built, not committed)
+
+The user asked for "2 and 4 from phase 9" and OK'd the plan, including a one-off `pnpm dlx lighthouse@13.6.0` (not added to `package.json`).
+
+- **Accessibility (item 2):**
+  - `src/components/layout/SkipLink.tsx` (new, not in the plan's file list): a "Skip to content" link, hidden until focused. It's the first child of the store and admin layouts, and each layout's `<main>` now has `id="main"`.
+  - `PlayerBar`: the seek slider says "0:12 of 1:30" and the volume slider says "90%" to screen readers (`aria-valuetext`), instead of raw numbers.
+  - `skeleton.tsx`: the pulse stops for people who turn animations off (`motion-reduce:animate-none`).
+  - **Bug found in the keyboard test, fixed:** quick arrow presses on the seek slider moved the audio only one step. `seek()` in `src/store/player.ts` set the audio's time but left the store's `currentTime` until the next `timeupdate`, so the slider jumped back between presses. `seek()` now stores the new time at once, which also stops small arrow-key skips from counting toward the 10 s "listened" total. There are 2 new tests in `player-store.test.ts`; both fail without the fix. The waveform listens to the store too, so it now moves as soon as it's clicked. It only seeks on a click, so this can't cause a loop.
+  - **Keyboard-only check** on the beat page, production build, desktop Chrome:
+    - Tab 1 is the skip link, and Enter on it lands on Play.
+    - Enter plays the beat, and the label becomes "Pause First Light".
+    - The arrow keys change the license.
+    - Enter on Add to cart opens the cart drawer, with focus inside.
+    - Tab can't leave the drawer (8 Tabs and focus is still inside).
+    - Escape closes the drawer and puts focus back on the button that opened it.
+    - In the player bar: Space plays and pauses; Right and Left move 0.9 s, Page Up 9 s, Home goes to 0:00; Down lowers the volume.
+    - Every stop shows a focus ring. Afterwards the cart was put back as it was (Glass Heart only).
+  - Contrast: Lighthouse's accessibility score, which checks contrast, is 100 on all 6 runs.
+- **Performance (item 4):**
+  - `next/image` now resizes covers: `unoptimized` is gone from `BeatCard`, the beat page and the admin beat page. `sizes` matches each layout, and the beat page cover has `preload`. `next.config.ts` allows images from `PUBLIC_CDN_URL` only (`remotePatterns`), and allows localhost only in dev (`dangerouslyAllowLocalIP`).
+  - Catalog caching in `src/lib/catalog.ts`: the catalog page, featured, newest, sitemap and filter-option queries are wrapped in `unstable_cache`, tagged `catalog`, and kept for at most 60 s. `use cache` would need `cacheComponents: true`, a much bigger change. The beat page and the cart stay uncached, so prices and status there are always read fresh. The admin actions that change what's on show call `updateTag("catalog")`: update beat, status, prices, file. Creating a beat doesn't, because drafts aren't listed. Sales flip a beat to RESERVED or SOLD outside those actions, so the catalog can show the old badge for up to 60 s. The beat page and checkout always check the real status.
+  - **Lighthouse fixes:**
+    - The beat page shifted by 0.27 when it replaced its skeleton (desktop performance 73). The skeleton was much shorter than the page, so the footer showed and the scrollbar appeared afterwards. The beat skeleton is now about as tall as the page, and `scrollbar-gutter: stable` in `globals.css` keeps room for the scrollbar. Shift is now 0, and desktop performance is 91.
+    - Every page logged a 404 for `/favicon.ico` (best practices 96). `src/app/icon.svg` is a small bars icon, and Next.js adds its `<link>` itself. Best practices is now 100.
+  - At this point mobile performance was under 90 on the beat page and home, so the user chose to remove the waveform (next entry up), which has the final scores.
+- **Checks:** lint, typecheck, Prettier, 177 unit tests, 79 integration tests and `pnpm build` pass.
+
+### 2026-11-18: Phase 9 item 1, mobile pass, skeletons, empty states, error pages (built, not committed)
+
+The user asked for "phase 9 part 1" and OK'd the plan, including starting Docker Desktop.
+
+- **Skeletons (new):**
+  - `src/components/ui/skeleton.tsx`: shadcn's Skeleton, added with `pnpm shadcn add skeleton`. No new package.
+  - `(store)/beats/loading.tsx`: title, the filter grid and 6 cards.
+  - `(store)/beats/[slug]/loading.tsx`: cover, title lines and the license block.
+  - `(store)/loading.tsx`: plain lines, for home, `/account`, `/licenses` and the success page.
+  - `admin/loading.tsx`: a heading and a block.
+  - Each has an `sr-only` "Loading…".
+  - Checked with a temporary 5 s delay in the two beat pages, at 375 and 1280 px. The delay was removed (git diff shows no change to either page).
+- **Error pages (new):**
+  - `(store)/error.tsx`: inside the header and footer. "Something went wrong", a Try again button (`retry()`, stable since Next.js 16.3) and a link to `/contact`.
+  - `admin/error.tsx`: the same inside the admin nav, pointing to the server log.
+  - The error itself isn't shown: in production the browser only gets a generic message.
+  - No `global-error.tsx`: the root layout only sets the font and the player.
+- **404 (new):**
+  - `src/app/not-found.tsx`: unknown URLs (real 404, dark like the site).
+  - `(store)/not-found.tsx`: re-exports it, so `notFound()` on the beat page keeps the store header.
+- **Empty state:** `/admin/beats` says "No beats yet" instead of showing an empty table. Every other list already had one.
+- **Mobile fixes**, checked by loading each page in a 375 px-wide iframe (360 px usable) on the dev server:
+  - Header: the logo name wrapped onto two lines. It's icon-only below `sm` now, with the name in `sr-only`.
+  - `LicenseTable` (beat page, `/licenses`): the page scrolled sideways by 13 px. The `sr-only` labels in the cells are `position: absolute` and escaped the `overflow-x-auto` box. `relative` on the box fixes it.
+  - Player bar: the seek slider was 26 px wide. On phones the gaps are smaller and the times are hidden, so it's 108 px now.
+  - `/beats` filters: one field per row filled the whole first screen. Two columns below `lg` now (5 rows instead of 9). Desktop is unchanged. The skeleton matches.
+  - Admin nav: `flex-wrap`, so its 7 links don't run off a phone screen.
+  - `/account` header: the buttons go under the title on phones.
+  - No sideways scroll on: home, `/beats`, a beat page, `/cart`, the cart drawer, `/licenses`, `/faq`, `/contact`, `/terms`, `/privacy`, `/sign-in`, `/checkout/cancel`, the 404 page.
+- **Seen in the browser:**
+  - With the database off: `/beats` showed the new error page inside the store frame.
+  - `/beats/Not_A_Slug` showed the 404 with the header.
+  - `/nope` returned a real 404.
+- **Found along the way:** the beat 404 now returns 200 (see Open questions). Also, a dev server left from the SEO task had broken when `pnpm build` ran next to it (a reload loop and "Jest worker" errors). Claude stopped it and started a fresh one. Don't run `pnpm build` while `pnpm dev` is running.
+- **Checks:** lint, typecheck, 176 unit tests and `pnpm build` pass. No new tests: the new files are layout without logic.
 
 ### 2026-11-18: Phase 9 item 3, SEO (committed, not pushed)
 

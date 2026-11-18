@@ -30,9 +30,11 @@ export function BeatFilters({ filters, options }: Props) {
     <Form
       key={JSON.stringify(filters)}
       action="/beats"
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      // Two columns even on a phone: one field per row filled the whole
+      // first screen, so no beats showed without scrolling.
+      className="grid grid-cols-2 gap-3 lg:grid-cols-4"
     >
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+      <label className="col-span-2 flex flex-col gap-1 text-sm">
         Search
         <Input
           type="search"
@@ -93,7 +95,7 @@ export function BeatFilters({ filters, options }: Props) {
           ))}
         </NativeSelect>
       </label>
-      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+      <div className="flex items-end gap-2 lg:col-span-3">
         <Button type="submit">Apply</Button>
         <Link href="/beats" className={buttonVariants({ variant: "ghost" })}>
           Clear

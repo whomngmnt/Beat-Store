@@ -22,7 +22,9 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <div className="flex items-start justify-between gap-3">
+      {/* On a phone the buttons go under the title: side by side they
+          don't fit. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold">Your account</h1>
           <p className="text-muted-foreground">Signed in as {user.email}</p>

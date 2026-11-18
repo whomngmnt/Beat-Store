@@ -70,7 +70,9 @@ export function PlayerBar() {
             aria-label="Player"
             className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur"
           >
-            <div className="mx-auto flex h-20 max-w-6xl items-center gap-4 px-4">
+            {/* On a phone the gaps are smaller and the times are hidden,
+                so the seek slider keeps a usable width. */}
+            <div className="mx-auto flex h-20 max-w-6xl items-center gap-2 px-4 sm:gap-4">
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -106,10 +108,15 @@ export function PlayerBar() {
               </Link>
 
               <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground tabular-nums">
-                <span>{formatTime(currentTime)}</span>
+                <span className="hidden sm:inline">
+                  {formatTime(currentTime)}
+                </span>
                 <input
                   type="range"
                   aria-label="Seek"
+                  // Read out as "0:45 of 1:30", not "45.2341". Keyboard:
+                  // arrows move 1% (step="any"), Page Up/Down 10%.
+                  aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
                   min={0}
                   max={duration}
                   step="any"
@@ -117,7 +124,7 @@ export function PlayerBar() {
                   onChange={(event) => seek(Number(event.target.value))}
                   className="min-w-0 flex-1 accent-primary"
                 />
-                <span>{formatTime(duration)}</span>
+                <span className="hidden sm:inline">{formatTime(duration)}</span>
               </div>
 
               <div className="hidden items-center gap-2 sm:flex">
@@ -125,6 +132,7 @@ export function PlayerBar() {
                 <input
                   type="range"
                   aria-label="Volume"
+                  aria-valuetext={`${Math.round(volume * 100)}%`}
                   min={0}
                   max={1}
                   step={0.05}

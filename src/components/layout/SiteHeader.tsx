@@ -10,7 +10,9 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-4 px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <AudioLines className="size-5" aria-hidden />
-          Beat Store
+          {/* Only the icon on a phone: the name, two links and two icons
+              don't fit in one row. Screen readers still read the name. */}
+          <span className="sr-only sm:not-sr-only">Beat Store</span>
         </Link>
 
         <nav aria-label="Main" className="flex items-center gap-1">

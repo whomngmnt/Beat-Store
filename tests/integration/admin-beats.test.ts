@@ -1,6 +1,7 @@
 // The admin beat actions and the upload route against the real database
 // (PLAN.md §5.5, .claude/rules/uploads.md). Storage reads are faked: each
 // test says how big an uploaded file is and what its first bytes are.
+import { updateTag } from "next/cache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   attachBeatFile,
@@ -21,9 +22,15 @@ import {
   deleteTestUser,
 } from "./fixtures";
 
-// refresh() only works inside a real Next request; redirect() throws, as
-// the real one does.
-vi.mock("next/cache", () => ({ refresh: vi.fn() }));
+// refresh() and updateTag() only work inside a real Next request; redirect()
+// throws, as the real one does. unstable_cache (used by src/lib/catalog.ts,
+// which the actions import) also needs Next, so here it returns the
+// function uncached.
+vi.mock("next/cache", () => ({
+  refresh: vi.fn(),
+  updateTag: vi.fn(),
+  unstable_cache: (fn: unknown) => fn,
+}));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`redirect to ${url}`);
@@ -216,8 +223,11 @@ describe("admin beat actions", () => {
       (await upload(beat.beatId, "wav", 50 * MB, WAV_START)).result.ok,
     ).toBe(true);
 
+    vi.mocked(updateTag).mockClear();
     expect((await publish()).ok).toBe(true);
     expect((await beatRow(beat.beatId)).status).toBe("PUBLISHED");
+    // The store's cached lists are cleared, so the beat shows there at once.
+    expect(updateTag).toHaveBeenCalledWith("catalog");
   });
 
   it("never change a beat a checkout is holding", async () => {
@@ -228,6 +238,7 @@ describe("admin beat actions", () => {
       data: { status: "RESERVED" },
     });
 
+    vi.mocked(updateTag).mockClear();
     const result = await setBeatStatus(
       undefined,
       form({ beatId: beat.beatId, status: "DRAFT" }),
@@ -235,6 +246,8 @@ describe("admin beat actions", () => {
 
     expect(result.ok).toBe(false);
     expect((await beatRow(beat.beatId)).status).toBe("RESERVED");
+    // Nothing changed, so the cache is left alone.
+    expect(updateTag).not.toHaveBeenCalled();
   });
 
   it("save prices as cents and refuse a price that isn't one", async () => {

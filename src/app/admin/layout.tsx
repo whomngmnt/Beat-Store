@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SkipLink } from "@/components/layout/SkipLink";
 import { requireAdmin } from "@/lib/auth-guards";
 
 export const metadata: Metadata = {
@@ -16,8 +17,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
 
   return (
     <div className="flex min-h-svh flex-col">
+      <SkipLink />
       <header className="border-b">
-        <nav className="mx-auto flex w-full max-w-6xl items-center gap-6 px-4 py-3 text-sm">
+        {/* flex-wrap: on a phone the links go onto a second line instead
+            of running off the screen. */}
+        <nav className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
           <Link href="/admin" className="font-semibold">
             Beat Store admin
           </Link>
@@ -31,7 +35,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           </Link>
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         {children}
       </main>
     </div>

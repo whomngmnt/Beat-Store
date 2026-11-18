@@ -126,5 +126,9 @@
   }
   html {
     @apply font-sans;
+    /* Keeps room for the scrollbar even when a page is short. Otherwise
+       the centred content jumps sideways when a scrollbar appears, e.g.
+       when a skeleton is replaced by a longer page. */
+    scrollbar-gutter: stable;
   }
 }

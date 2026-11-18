@@ -1,9 +1,11 @@
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SkipLink } from "@/components/layout/SkipLink";
 
 export default function StoreLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-svh flex-col">
+      <SkipLink />
       {/* Always on: v1 can only run in test mode (src/lib/stripe.ts
           refuses a live key). Shop pages only, not the admin panel. */}
       <p className="bg-amber-400 px-4 py-1.5 text-center text-sm font-medium text-black">
@@ -11,7 +13,7 @@ export default function StoreLayout({ children }: LayoutProps<"/">) {
         4242.
       </p>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         {children}
       </main>
       <SiteFooter />

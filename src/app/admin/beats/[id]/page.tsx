@@ -101,13 +101,12 @@ export default async function EditBeatPage({
               {!key ? (
                 <p className="text-sm text-muted-foreground">Not uploaded.</p>
               ) : kind === "cover" ? (
-                // Not optimized yet: Phase 9 turns on next/image's resizing.
+                // next/image sends a 160 px copy (320 px on a sharp screen).
                 <Image
                   src={publicUrl(key)}
                   alt=""
                   width={160}
                   height={160}
-                  unoptimized
                   className="rounded-md object-cover"
                 />
               ) : kind === "preview" ? (

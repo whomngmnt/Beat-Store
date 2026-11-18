@@ -30,7 +30,7 @@ type PlayerState = {
   volume: number; // 0 to 1
   listenedSeconds: number; // real listening to the current track so far
   timeUpdate: (time: number) => boolean;
-  playQueue: (queue: Track[], index: number, startAt?: number) => void;
+  playQueue: (queue: Track[], index: number) => void;
   toggle: () => void;
   next: () => void;
   prev: () => void;
@@ -39,15 +39,14 @@ type PlayerState = {
 };
 
 export const usePlayerStore = create<PlayerState>()((set, get) => {
-  // Makes queue[index] the current track and plays it from `startAt`
-  // seconds.
-  function load(queue: Track[], index: number, startAt = 0) {
+  // Makes queue[index] the current track and plays it from the start.
+  function load(queue: Track[], index: number) {
     const track = queue[index];
     if (!track) return;
     set({
       queue,
       index,
-      currentTime: startAt,
+      currentTime: 0,
       duration: 0,
       listenedSeconds: 0,
     });
@@ -55,8 +54,6 @@ export const usePlayerStore = create<PlayerState>()((set, get) => {
     const { audio } = get();
     if (!audio) return;
     audio.src = track.previewUrl;
-    // The file hasn't loaded yet, so this sets where playback will start.
-    audio.currentTime = startAt;
     // play() rejects when a newer track interrupts it or the file can't
     // play. Nothing to do then: the element's events keep the state right.
     audio.play().catch(() => {});
@@ -111,9 +108,13 @@ export const usePlayerStore = create<PlayerState>()((set, get) => {
       else seek(0);
     },
 
+    // Stores the new time at once, not at the next timeupdate. Otherwise
+    // the seek slider springs back between quick arrow-key presses, and
+    // timeUpdate would count a small skip forward as listening.
     seek: (time) => {
       const { audio } = get();
       if (audio) audio.currentTime = time;
+      set({ currentTime: time });
     },
 
     setVolume: (volume) => {

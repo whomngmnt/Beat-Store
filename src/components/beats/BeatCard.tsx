@@ -34,12 +34,14 @@ export function BeatCard({
       {/* The uploaded cover, or a placeholder for a beat without one. */}
       <div className="relative flex aspect-square items-center justify-center bg-muted">
         {beat.coverKey ? (
-          // Not optimized yet: Phase 9 turns on next/image's resizing.
+          // next/image sends a resized copy. `sizes` is the card's width in
+          // BeatGrid (1, 2 or 3 columns), so a phone doesn't get a desktop
+          // file. Lazy-loaded (the default): most cards start off screen.
           <Image
             src={publicUrl(beat.coverKey)}
             alt=""
             fill
-            unoptimized
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover"
           />
         ) : (

@@ -38,13 +38,6 @@ describe("playQueue", () => {
     expect(audio.play).toHaveBeenCalledOnce();
   });
 
-  it("can start part-way through the track", () => {
-    player().playQueue(queue, 0, 42);
-    expect(audio.currentTime).toBe(42);
-    expect(player().currentTime).toBe(42);
-    expect(audio.play).toHaveBeenCalledOnce();
-  });
-
   it("ignores an index outside the queue", () => {
     player().playQueue(queue, 5);
     expect(player().index).toBe(-1);
@@ -143,9 +136,13 @@ describe("timeUpdate (play counting)", () => {
     expect(listen(0, 10)).toBe(1);
   });
 
-  it("counts from a start part-way through", () => {
-    player().playQueue(queue, 0, 30);
-    expect(listen(30, 40)).toBe(1);
+  it("doesn't count small arrow-key seeks as listening", () => {
+    player().playQueue(queue, 0);
+    for (let time = 0.9; time < 9; time += 0.9) {
+      player().seek(time);
+      player().timeUpdate(time); // the element reports the new time
+    }
+    expect(player().listenedSeconds).toBe(0);
   });
 });
 
@@ -153,6 +150,7 @@ describe("seek and setVolume", () => {
   it("set the element's time and volume", () => {
     player().seek(42);
     expect(audio.currentTime).toBe(42);
+    expect(player().currentTime).toBe(42); // the slider follows at once
 
     player().setVolume(0.5);
     expect(audio.volume).toBe(0.5);
