@@ -6,9 +6,14 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 - **Stage:** Phase 8 (admin panel) is built and every Phase 8 box is ticked. It is committed and pushed to `develop` (commit "Phase 8: admin panel, uploads, license tiers, dashboard and coupons"). Lint, typecheck, 169 unit tests and 79 integration tests pass. Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to the Phase 8 commit is pushed to `origin/develop`.
-- **Next step:** Phase 9: polish, plan first.
+- **Phase 9 (polish), in progress:** item 5 is done and ticked: the legal and static pages and the "TEST MODE" banner. It is committed on `develop` (commit "Phase 9: legal pages, contact page and test-mode banner"), not pushed yet. Lint, typecheck and 169 unit tests pass. Items 1–4 are open.
+- **Next step:** the next Phase 9 item, plan first.
 
 ## Open questions
+
+- **`/licenses` not seen in a browser yet.** Docker wasn't running on 2026-11-18, so only `/faq`, `/terms`, `/privacy` and `/contact` were loaded (all 200, banner shown). `/licenses` reads the tiers from the database and needs `docker compose up -d`.
+- **Contact details are placeholders.** The user doesn't have the accounts yet (2026-11-18). Their local `.env` now has `CONTACT_EMAIL=contact@example.com` and `your-name` links for Instagram, TikTok and YouTube, to swap for real ones later. `.env.example` keeps them empty. Where they're empty (e.g. on Vercel until set), `/contact` says "Contact details aren't set up yet". The page has no dynamic code, so `next build` bakes the values in: on Vercel, changing one needs a redeploy.
+- **Terms and privacy text is Claude's plain-English summary, not legal text.** Fine while the store is test mode only. It needs a real review before live mode (v2). The privacy page lists only what the code stores today; the email and PDF slices must update it.
 
 - **Phase 8 admin pages not checked in a browser (user's choice, 2026-11-17).** The user said not to check them. They're covered by the integration tests only. Checked in the browser:
   - the catalog, the beat page, and the cart with its new coupon field (a wrong code shows "This coupon code isn't valid")
@@ -53,6 +58,22 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-18: Phase 9 item 5, legal pages and test-mode banner (committed, not pushed)
+
+The user chose item 5 first, OK'd the plan and picked: contact page with email, Instagram, TikTok and YouTube; banner on shop pages only; "contact support" turned into links.
+
+- **Banner** (`src/app/(store)/layout.tsx`): an amber line above the header, "TEST MODE — no real payments. Pay with the test card 4242 4242 4242 4242." Always shown, with no env check, because `src/lib/stripe.ts` already refuses any key that isn't `sk_test_`. Not on `/admin`.
+- **New pages** in `src/app/(store)/`. The footer and header already linked to all five, so they were 404s until now.
+  - `licenses`: all four tiers from the database, in the same `LicenseTable` as the beat page (with default prices), then each tier's description and terms. `await connection()` like the home page, so `next build` needs no database. Edits on `/admin/licenses` show here.
+  - `faq`: payments in test mode, which license, no account needed, how downloads work (5 per file, 30-day link), re-downloads from `/account`, the exclusive hold, and what to do when downloads run out.
+  - `contact`: email and social links from env vars. Any that's empty is left out.
+  - `terms`: test mode, licenses, tagged previews, downloads, accounts.
+  - `privacy`: what's stored (from `prisma/schema.prisma` and the cart in localStorage), the services used, and how to ask for data to be changed or deleted.
+- **"Contact support"** on the success page (expired link) and the sign-in error now links to `/contact`. The download route's 404/429 messages are plain-text responses, so they stay as text.
+- **Env:** `CONTACT_EMAIL`, `INSTAGRAM_URL`, `TIKTOK_URL`, `YOUTUBE_URL` added (empty) to `.env.example` and PLAN.md §7.
+- **Checks:** lint, typecheck and 169 unit tests pass. No new tests: the pages are text, and `/licenses` is one `findMany`. On the dev server, `/faq`, `/terms`, `/privacy` and `/contact` returned 200 with the banner. `/licenses` wasn't loaded (Docker off).
+- **Placeholders:** the user has no contact accounts yet, so placeholder values went into their local `.env` (not committed). The user said to commit.
 
 ### 2026-11-17: Phase 8, admin panel (committed and pushed)
 
@@ -894,4 +915,6 @@ Decisions:
 ## Up next
 
 - [ ] Decide whether to bump Better Auth from 1.7.22 (see Open questions).
-- [ ] Phase 8: Admin panel (PLAN.md §8), plan first. It includes the reset and reissue buttons moved from Phase 6.
+- [ ] Push the Phase 9 item 5 commit when the user says so. Open `/licenses` once with Docker running.
+- [ ] Swap the placeholder contact values in `.env` for real ones once the accounts exist (and set them on Vercel in Phase 10).
+- [ ] Phase 9 items 1–4 (mobile and error pages, accessibility, SEO, performance), one at a time, plan first.

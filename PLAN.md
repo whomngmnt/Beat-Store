@@ -309,6 +309,8 @@ PUBLIC_CDN_URL=
 RESEND_API_KEY=            EMAIL_FROM=                # later slice (Resend)
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 CRON_SECRET=
+CONTACT_EMAIL=             # contact page; real values only in .env
+INSTAGRAM_URL=             TIKTOK_URL=     YOUTUBE_URL=
 UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 ```
 
@@ -399,7 +401,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 - [ ] Accessibility: keyboard-controllable player, aria labels, contrast
 - [ ] SEO: sitemap.xml, robots.txt, JSON-LD (Product/MusicRecording)
 - [ ] Performance: `next/image`, caching of catalog queries, Lighthouse ≥ 90
-- [ ] Legal/static pages and a "TEST MODE — no real payments" banner
+- [x] Legal/static pages and a "TEST MODE — no real payments" banner
 
 ### Phase 10: Testing & deploy (days 30–32)
 

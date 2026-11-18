@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { getCurrentUser } from "@/lib/auth-guards";
@@ -29,8 +30,11 @@ export default async function SignInPage({
       </p>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
-          Sign-in didn&apos;t work. Please try again, or contact support if it
-          keeps happening.
+          Sign-in didn&apos;t work. Please try again, or{" "}
+          <Link href="/contact" className="underline underline-offset-4">
+            contact support
+          </Link>{" "}
+          if it keeps happening.
         </p>
       ) : null}
       <GoogleSignInButton />

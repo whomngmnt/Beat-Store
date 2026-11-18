@@ -124,8 +124,11 @@ export default async function CheckoutSuccessPage({
       ) : (
         order.status === "PAID" && (
           <p className="text-sm text-muted-foreground">
-            This download link is incomplete or has expired. Please contact
-            support for a new one.
+            This download link is incomplete or has expired. Please{" "}
+            <Link href="/contact" className="underline underline-offset-4">
+              contact support
+            </Link>{" "}
+            for a new one.
           </p>
         )
       )}
