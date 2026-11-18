@@ -1,0 +1,41 @@
+# Local Postgres and S3 storage for development. Passwords and keys here are
+# local-only placeholders.
+name: beatstore
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: beatstore
+    ports:
+      # Host port 5433: a native PostgreSQL already uses 5432 on this machine.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d beatstore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Stands in for the private R2 bucket (PLAN.md §5.1), so signed download
+  # links can be tested locally. SeaweedFS "weed mini": one container with
+  # an S3 API on port 8333. The two keys create its only user, and once a
+  # user exists every request must be signed. S3_BUCKET creates the bucket
+  # on the first start.
+  storage:
+    image: chrislusf/seaweedfs:4.53
+    environment:
+      AWS_ACCESS_KEY_ID: local-dev-key
+      AWS_SECRET_ACCESS_KEY: local-dev-secret
+      S3_BUCKET: beatstore-files
+    ports:
+      - "8333:8333"
+    volumes:
+      - s3data:/data
+
+volumes:
+  pgdata:
+  s3data:

@@ -1,0 +1,6 @@
+# Prettier also skips everything in .gitignore.
+pnpm-lock.yaml
+# Docs are written by hand and reviewed as-is.
+*.md
+# Claude Code config and the git guard hook stay exactly as reviewed.
+.claude/

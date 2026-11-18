@@ -1,0 +1,270 @@
+// Database schema (PLAN.md §4).
+// The connection URL is set in prisma.config.ts, not here (Prisma 7).
+//
+// Conventions:
+// - Every id is a random UUID v4, so ids can't be guessed or counted through.
+// - Money is integer cents (Int). Never Float.
+// - Table and column names stay exactly as written here (no snake_case
+//   mapping), because raw SQL such as the exclusive reservation in
+//   .claude/rules/exclusives.md uses "Beat", "reservedByOrderId" and so on.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BeatStatus {
+  DRAFT
+  PUBLISHED
+  RESERVED
+  SOLD
+}
+
+enum LicenseCode {
+  BASIC
+  PREMIUM
+  TRACKOUT
+  EXCLUSIVE
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+  REFUNDED
+  FAILED
+}
+
+enum FileType {
+  MP3
+  WAV
+  STEMS
+}
+
+// Fields match Better Auth's core user table (name, email, emailVerified,
+// image, createdAt, updatedAt), plus our own role. emailVerified comes from
+// Google's email_verified; guest orders show in /account only when it's true.
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders   Order[]
+  sessions Session[]
+  accounts Account[]
+}
+
+// The next three tables belong to Better Auth (src/lib/auth.ts). Their
+// fields are the ones `auth generate` (Better Auth's CLI, 1.7.23) produces,
+// with our UUID ids.
+
+// One row per signed-in browser. The cookie holds the token.
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A way to sign in that belongs to a user: for v1, their Google account
+// (providerId "google", accountId = Google's user id). Better Auth also
+// saves Google's short-lived tokens here. The store never uses them.
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // unused: there are no passwords in v1
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Short-lived values Better Auth checks later, such as the OAuth state that
+// ties Google's callback to the sign-in that started it.
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Beat {
+  id          String     @id @default(uuid())
+  slug        String     @unique
+  title       String
+  description String     @default("") // plain text, never rendered as HTML
+  bpm         Int
+  musicalKey  String
+  genre       String
+  mood        String
+  tags        String[]
+  coverKey    String? // storage key in the public bucket, like previewKey
+  // Storage keys, not URLs. Empty until the admin uploads the files.
+  previewKey  String?
+  mp3Key      String?
+  wavKey      String?
+  stemsKey    String?
+  status      BeatStatus @default(DRAFT)
+  plays       Int        @default(0)
+  featured    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  // Set while an exclusive checkout holds this beat (PLAN.md §5.4).
+  reservedByOrderId String?
+  reservedByOrder   Order?    @relation(fields: [reservedByOrderId], references: [id])
+  reservedUntil     DateTime?
+
+  licenses   BeatLicense[]
+  orderItems OrderItem[]
+}
+
+model LicenseTier {
+  id                String      @id @default(uuid())
+  code              LicenseCode @unique
+  name              String
+  description       String
+  defaultPriceCents Int
+  includesMp3       Boolean
+  includesWav       Boolean
+  includesStems     Boolean
+  streamLimit       Int? // null = unlimited
+  videoLimit        Int? // null = unlimited
+  terms             String
+  sortOrder         Int
+
+  beatLicenses BeatLicense[]
+  orderItems   OrderItem[]
+}
+
+// The price of one tier for one beat. It starts at the tier's
+// defaultPriceCents and the admin can change it per beat.
+model BeatLicense {
+  id            String      @id @default(uuid())
+  beatId        String
+  beat          Beat        @relation(fields: [beatId], references: [id])
+  licenseTierId String
+  licenseTier   LicenseTier @relation(fields: [licenseTierId], references: [id])
+  priceCents    Int
+  active        Boolean     @default(true)
+
+  @@unique([beatId, licenseTierId])
+}
+
+model Order {
+  id                     String      @id @default(uuid())
+  userId                 String?
+  user                   User?       @relation(fields: [userId], references: [id])
+  // Guests give their email in Stripe Checkout, so it's known only after payment.
+  email                  String?
+  status                 OrderStatus @default(PENDING)
+  // Empty when the order is created. The order exists before the Stripe session.
+  stripeSessionId        String?     @unique
+  stripePaymentIntentId  String?
+  totalCents             Int
+  currency               String      @default("usd")
+  couponId               String?
+  coupon                 Coupon?     @relation(fields: [couponId], references: [id])
+  // SHA-256 hash of the guest download token. The raw token is never stored.
+  downloadTokenHash      String?     @unique
+  downloadTokenExpiresAt DateTime?
+  fulfilledAt            DateTime?
+  createdAt              DateTime    @default(now())
+  paidAt                 DateTime?
+  // Set when Stripe reports a payment that doesn't match this order (not
+  // paid, or a different amount or currency). The order is then not
+  // fulfilled, and an admin has to look at it.
+  reviewNote             String?
+
+  items         OrderItem[]
+  reservedBeats Beat[]
+}
+
+// Title, license name and price are copied at purchase time, so later edits
+// to a beat or tier never change a past order.
+model OrderItem {
+  id                  String      @id @default(uuid())
+  orderId             String
+  order               Order       @relation(fields: [orderId], references: [id])
+  beatId              String
+  beat                Beat        @relation(fields: [beatId], references: [id])
+  licenseTierId       String
+  licenseTier         LicenseTier @relation(fields: [licenseTierId], references: [id])
+  priceCents          Int
+  beatTitleSnapshot   String
+  licenseNameSnapshot String
+  // An exclusive that another buyer got first (PLAN.md §5.4): this item is
+  // paid but not delivered, and gets refunded after the fulfilment commit.
+  // refundedAt stays empty until Stripe has accepted the refund, so the
+  // cron job can retry it.
+  refundNeeded        Boolean     @default(false)
+  refundedAt          DateTime?
+
+  downloads Download[]
+}
+
+model Download {
+  id          String    @id @default(uuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  fileType    FileType
+  count       Int       @default(0)
+  maxCount    Int       @default(5)
+  lastAt      DateTime?
+
+  @@unique([orderItemId, fileType])
+}
+
+model Coupon {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  // Set exactly one of these two. Zod checks that when a coupon is saved.
+  percentOff     Int?
+  amountOffCents Int?
+  active         Boolean   @default(true)
+  expiresAt      DateTime? // null = never expires
+
+  orders Order[]
+}
+
+// One row per Stripe event we have processed. The id is Stripe's event id,
+// so inserting the same event twice fails. That failure is the idempotency
+// guard (PLAN.md §5.2, step 6).
+model WebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
