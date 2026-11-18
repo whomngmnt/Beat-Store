@@ -251,6 +251,8 @@ Claude-code-project/
 │  │  ├─ api/auth/[...all]/route.ts              # Better Auth handler
 │  │  ├─ api/cron/fulfilment-retry/route.ts      # retry post-commit side effects: refunds (emails/PDFs in later slices), CRON_SECRET protected
 │  │  ├─ api/cron/release-reservations/route.ts  # free expired exclusive reservations
+│  │  ├─ sitemap.ts              # /sitemap.xml: static pages + every beat on show
+│  │  ├─ robots.ts               # /robots.txt: everything but /admin and /api/
 │  │  └─ layout.tsx              # root: <html class="dark">, fonts; includes <PlayerBar/>
 │  ├─ components/
 │  │  ├─ layout/SiteHeader.tsx, SiteFooter.tsx
@@ -277,6 +279,7 @@ Claude-code-project/
 │  │  ├─ email.ts                # later slice (Resend)
 │  │  ├─ license-pdf.tsx         # later slice (PDF)
 │  │  ├─ pricing.ts              # price display, cart total, dollars↔cents, coupon maths (pure → unit-tested)
+│  │  ├─ seo.ts                  # siteUrl, beatJsonLd() for the beat page (pure → unit-tested)
 │  │  └─ validators.ts           # Zod schemas
 │  ├─ actions/                   # server actions: cart.ts, checkout.ts, plays.ts; admin: beats.ts, orders.ts, licenses.ts, coupons.ts
 │  ├─ store/                     # Zustand: player.ts, cart.ts (persisted)
@@ -399,7 +402,7 @@ UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=  # later slice (Upstash)
 
 - [ ] Responsive/mobile pass, loading skeletons, empty states, error boundaries
 - [ ] Accessibility: keyboard-controllable player, aria labels, contrast
-- [ ] SEO: sitemap.xml, robots.txt, JSON-LD (Product/MusicRecording)
+- [x] SEO: sitemap.xml, robots.txt, JSON-LD (Product/MusicRecording)
 - [ ] Performance: `next/image`, caching of catalog queries, Lighthouse ≥ 90
 - [x] Legal/static pages and a "TEST MODE — no real payments" banner
 

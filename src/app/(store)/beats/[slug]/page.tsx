@@ -9,6 +9,7 @@ import { Waveform } from "@/components/player/Waveform";
 import { badgeVariants } from "@/components/ui/badge";
 import { getBeatBySlug } from "@/lib/catalog";
 import { formatPrice } from "@/lib/pricing";
+import { beatJsonLd } from "@/lib/seo";
 import { publicUrl } from "@/lib/storage";
 import type { Track } from "@/store/player";
 
@@ -63,6 +64,10 @@ export default async function BeatPage({ params }: PageProps<"/beats/[slug]">) {
 
   return (
     <div className="flex flex-col gap-10">
+      {/* Structured data for search engines (src/lib/seo.ts). React writes
+          a script's string child as it is, so no raw HTML is needed. */}
+      <script type="application/ld+json">{beatJsonLd(beat)}</script>
+
       <div className="grid gap-8 md:grid-cols-[2fr_3fr]">
         {/* The uploaded cover, or a placeholder, as on BeatCard. self-start:
             if the square stretched to the row's height, its width would

@@ -143,6 +143,16 @@ export async function getNewestBeats() {
   });
 }
 
+// sitemap.xml: the slug of every beat on show, newest first. Drafts and
+// sold beats are left out by the same rule as /beats.
+export async function getSitemapBeats() {
+  return db.beat.findMany({
+    where: catalogWhere({}),
+    select: { slug: true },
+    orderBy: orderBy.newest,
+  });
+}
+
 // Dropdown choices: the genres, moods and keys of the beats on show.
 export async function getFilterOptions() {
   const beats = await db.beat.findMany({

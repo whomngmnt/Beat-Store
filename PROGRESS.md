@@ -6,11 +6,15 @@ Claude updates this file at the end of each task. Newest entries go first in the
 
 - **Stage:** Phase 8 (admin panel) is built and every Phase 8 box is ticked. It is committed and pushed to `develop` (commit "Phase 8: admin panel, uploads, license tiers, dashboard and coupons"). Lint, typecheck, 169 unit tests and 79 integration tests pass. Phases 6 and 7 are done. Phase 6's admin box moved to Phase 8 (user's choice, 2026-11-17), so every Phase 6 box is ticked. All three Phase 7 boxes are ticked. Phase 7 is committed and pushed to `develop` (commit "Phase 7: Google sign-in, /account and owner downloads"). Only the Phase 5 accounts box is open (R2 and Neon; Stripe and Google are done).
 - **Branch:** all work on `develop`. `main` is protected on GitHub and only changes through a pull request. Everything up to the Phase 8 commit is pushed to `origin/develop`.
-- **Phase 9 (polish), in progress:** item 5 is done and ticked: the legal and static pages and the "TEST MODE" banner. It is committed on `develop` (commit "Phase 9: legal pages, contact page and test-mode banner"), not pushed yet. Lint, typecheck and 169 unit tests pass. Items 1–4 are open.
+- **Phase 9 (polish), in progress:** items 3 and 5 are done and ticked.
+  - Item 5 (legal and static pages, "TEST MODE" banner) is committed on `develop` (commit "Phase 9: legal pages, contact page and test-mode banner"), not pushed yet.
+  - Item 3 (SEO: sitemap.xml, robots.txt, JSON-LD) is committed on `develop` (commit "Phase 9: sitemap, robots.txt and JSON-LD on beat pages"), not pushed yet. Lint, typecheck, 176 unit tests and `pnpm build` pass.
+  - Items 1, 2 and 4 are open.
 - **Next step:** the next Phase 9 item, plan first.
 
 ## Open questions
 
+- **`/sitemap.xml` and the beat page's JSON-LD not seen running yet.** Docker was off on 2026-11-18, so on the dev server only `/robots.txt` loaded (200, right content). `/sitemap.xml` gave 500 because Postgres refused the connection. Both need `docker compose up -d`. Then also paste a beat page's URL into Google's Rich Results Test or validator.schema.org once the site is deployed (Phase 10): neither can reach localhost.
 - **`/licenses` not seen in a browser yet.** Docker wasn't running on 2026-11-18, so only `/faq`, `/terms`, `/privacy` and `/contact` were loaded (all 200, banner shown). `/licenses` reads the tiers from the database and needs `docker compose up -d`.
 - **Contact details are placeholders.** The user doesn't have the accounts yet (2026-11-18). Their local `.env` now has `CONTACT_EMAIL=contact@example.com` and `your-name` links for Instagram, TikTok and YouTube, to swap for real ones later. `.env.example` keeps them empty. Where they're empty (e.g. on Vercel until set), `/contact` says "Contact details aren't set up yet". The page has no dynamic code, so `next build` bakes the values in: on Vercel, changing one needs a redeploy.
 - **Terms and privacy text is Claude's plain-English summary, not legal text.** Fine while the store is test mode only. It needs a real review before live mode (v2). The privacy page lists only what the code stores today; the email and PDF slices must update it.
@@ -58,6 +62,31 @@ Recorded 2026-11-07. The user said not to change any code for these now.
 - **Neon time zone (when Neon is set up, Phase 5).** Reminder: Neon is in this phase's account list. Timestamps are `timestamp(3)` without time zone, which is safe only while the database session runs in UTC (local Docker: `UTC`). The raw reservation SQL uses `now()`. Check Neon's time zone then and decide whether anything needs to change.
 
 ## Log
+
+### 2026-11-18: Phase 9 item 3, SEO (committed, not pushed)
+
+The user asked for "phase 9 part 3", OK'd the plan, and said to commit.
+
+- **`src/lib/seo.ts`** (new):
+  - `siteUrl` (`NEXT_PUBLIC_SITE_URL`, falling back to localhost).
+  - `beatJsonLd(beat)`, which builds one object typed `["Product", "MusicRecording"]` with name, description, url, cover image, genre, keywords and one `Offer` per active license.
+  - Prices come from `centsToDollars()`, so 2999 → "29.99" with no floats.
+  - A RESERVED beat's Exclusive is `OutOfStock`. A SOLD beat gets no offers, because its page shows no prices.
+  - Empty fields are left out.
+- **No raw HTML.** The beat page renders `<script type="application/ld+json">{text}</script>`. React 19 writes a script's string child unchanged and escapes any `</script` inside it. Before the text reaches React, every `<` is also turned into `<`. `no-raw-html.test.ts` still passes. It caught a comment that named the forbidden prop, which was reworded.
+- **`src/app/sitemap.ts`** (new):
+  - Lists the 7 store pages, then every beat on show (new `getSitemapBeats()` in `catalog.ts`, same rule as `/beats`, so drafts and sold beats are left out).
+  - `await connection()` makes it run per request, so `next build` needs no database.
+  - No `lastModified`: `Beat` has no `updatedAt`.
+- **`src/app/robots.ts`** (new):
+  - Allows everything except `/admin` and `/api/`, and links to the sitemap.
+  - `/account`, `/checkout` and `/sign-in` stay crawlable on purpose, so crawlers can read their `noindex`.
+- **Not done (kept to SEO):** images in the sitemap, site-wide JSON-LD on the home page, and switching the 3 older `NEXT_PUBLIC_SITE_URL || …` copies (root layout, `checkout.ts`, `downloads.ts`) over to `siteUrl`.
+- **Checks:**
+  - Lint, typecheck and 176 unit tests pass (7 new in `tests/unit/seo.test.ts`).
+  - `pnpm build` passes with the database off: `/robots.txt` is static, `/sitemap.xml` is dynamic.
+  - On the dev server, `/robots.txt` was right. `/sitemap.xml` returned 500 (Docker off).
+  - PLAN.md §6 lists the new files, and §8's SEO box is ticked.
 
 ### 2026-11-18: Phase 9 item 5, legal pages and test-mode banner (committed, not pushed)
 
